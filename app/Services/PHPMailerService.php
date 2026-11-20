@@ -13,18 +13,28 @@ class PHPMailerService
         $mail = new PHPMailer(true);
 
         try {
+            $port = (int) config('mail.mailers.smtp.port', 465);
+            $scheme = strtolower((string) config('mail.mailers.smtp.scheme', ''));
+
+            if ($port === 465 || $scheme === 'ssl' || $scheme === 'smtps') {
+                $encryption = PHPMailer::ENCRYPTION_SMTPS;
+            } else {
+                $encryption = PHPMailer::ENCRYPTION_STARTTLS;
+            }
+
             $mail->isSMTP();
-            $mail->Host       = config('mail.mailers.smtp.host');
+            $mail->Host       = config('mail.mailers.smtp.host', 'smtp.gmail.com');
             $mail->SMTPAuth   = true;
             $mail->Username   = config('mail.mailers.smtp.username');
             $mail->Password   = config('mail.mailers.smtp.password');
-            $mail->SMTPSecure = config('mail.mailers.smtp.scheme', 'tls');
-            $mail->Port       = (int) config('mail.mailers.smtp.port', 587);
+            $mail->SMTPSecure = $encryption;
+            $mail->Port       = $port;
+            $mail->Timeout    = 15;
 
-            $mail->setFrom(
-                config('mail.from.address'),
-                config('mail.from.name', 'PhishMind Security')
-            );
+            $fromAddress = config('mail.from.address') ?: config('mail.mailers.smtp.username');
+            $fromName    = config('mail.from.name', 'PhishMind Security');
+
+            $mail->setFrom($fromAddress, $fromName);
 
             $mail->addAddress($toEmail);
             $mail->isHTML(true);
