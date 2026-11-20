@@ -16,18 +16,24 @@
         @if($scenario->type === 'URL / Web Phishing')
             @php $domain = parse_url($scenario->content, PHP_URL_HOST) ?? $scenario->content; @endphp
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div class="bg-[#f0f4f8] border-b border-slate-200 p-3 flex items-center gap-2">
-                    <div class="flex gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-slate-300"></div><div class="w-2.5 h-2.5 rounded-full bg-slate-300"></div><div class="w-2.5 h-2.5 rounded-full bg-slate-300"></div></div>
-                    <div class="bg-white border border-slate-200 rounded text-xs text-slate-600 px-3 py-1 flex-1 ml-4 truncate font-mono flex items-center gap-2">
-                        <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                        {{ $scenario->content }}
+                <div class="bg-[#f0f4f8] border-b border-slate-200 p-2.5 sm:p-3 flex items-center gap-2">
+                    <div class="flex gap-1.5 shrink-0">
+                        <div class="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                        <div class="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                        <div class="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-lg text-xs text-slate-700 px-3 py-1.5 flex-1 min-w-0 ml-1.5 sm:ml-3 font-mono flex items-center gap-2 shadow-xs">
+                        <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                        <div class="overflow-x-auto whitespace-nowrap scrollbar-thin py-0.5 select-all overscroll-x-contain w-full min-w-0">
+                            <span class="inline-block font-mono text-slate-700">{{ $scenario->content }}</span>
+                        </div>
                     </div>
                 </div>
                 <div class="p-6 sm:p-12 md:p-16 text-center flex flex-col items-center justify-center">
                     <div class="w-16 h-16 bg-brand-dark text-white rounded-xl flex items-center justify-center mb-6 shadow-lg"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
-                    <h3 class="text-xl font-bold text-slate-800 mb-2">{{ $domain }}</h3>
-                    <p class="text-slate-500 mb-6 max-w-md">This page is requesting you to sign in or view secure content.</p>
-                    <button type="button" class="bg-brand-dark text-white px-6 py-2.5 rounded-lg font-medium hover:bg-slate-800 transition">Continue to {{ $domain }}</button>
+                    <h3 class="text-xl font-bold text-slate-800 mb-2 truncate max-w-full px-4">{{ $domain }}</h3>
+                    <p class="text-slate-500 mb-6 max-w-md text-sm px-4">This page is requesting you to sign in or view secure content.</p>
+                    <button type="button" class="bg-brand-dark text-white px-6 py-2.5 rounded-lg font-medium hover:bg-slate-800 transition text-sm">Continue to {{ Str::limit($domain, 25) }}</button>
                 </div>
             </div>
         @else
@@ -48,8 +54,8 @@
                     @endif
                     {{ $previewLabel }}
                 </div>
-                <div class="p-8 max-w-2xl mx-auto">
-                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-6 text-sm text-slate-700 whitespace-pre-line">
+                <div class="p-4 sm:p-8 max-w-2xl mx-auto">
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 sm:p-6 text-sm text-slate-700 whitespace-pre-line break-words overflow-x-auto">
                         {{ $content }}
                     </div>
                 </div>

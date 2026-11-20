@@ -13,11 +13,23 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <!-- Left Column -->
         <div class="space-y-6">
-            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-sm">
                 <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">CONTENT YOU CHECKED</p>
-                <div class="bg-[#f0f4f8] p-4 rounded-xl text-sm text-slate-700 font-mono leading-relaxed whitespace-pre-line break-words">
-                    {{ $content }}
-                </div>
+                @php
+                    $isUrl = ($type === 'url') || str_starts_with(trim($content), 'http://') || str_starts_with(trim($content), 'https://');
+                @endphp
+                @if($isUrl)
+                    <div class="bg-white border border-slate-200 rounded-lg text-xs sm:text-sm text-slate-700 px-3 py-2 font-mono flex items-center gap-2 shadow-xs">
+                        <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                        <div class="overflow-x-auto whitespace-nowrap scrollbar-thin py-0.5 select-all overscroll-x-contain w-full min-w-0">
+                            <span class="inline-block font-mono text-slate-700">{{ $content }}</span>
+                        </div>
+                    </div>
+                @else
+                    <div class="bg-[#f0f4f8] p-4 rounded-xl text-sm text-slate-700 font-mono leading-relaxed whitespace-pre-line break-words overflow-x-auto">
+                        {{ $content }}
+                    </div>
+                @endif
             </div>
 
             <div class="flex gap-3 flex-wrap">

@@ -32,9 +32,30 @@
         @foreach($questions as $index => $scenario)
         <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 shadow-sm {{ $index > 0 ? 'hidden' : '' }}" data-index="{{ $index }}">
             <p class="text-sm font-bold text-slate-500 mb-2">QUESTION {{ $index + 1 }} OF {{ $questions->count() }}</p>
-            <div class="bg-[#f0f4f8] p-4 rounded-xl text-sm text-slate-700 font-mono leading-relaxed break-words mb-6">
-                {{ $scenario->content }}
-            </div>
+            @php
+                $isUrl = str_starts_with(trim($scenario->content), 'http://') || str_starts_with(trim($scenario->content), 'https://') || $scenario->type === 'URL / Web Phishing';
+            @endphp
+            @if($isUrl)
+                <div class="mb-6 bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                    <div class="bg-[#f0f4f8] border-b border-slate-200 p-2.5 sm:p-3 flex items-center gap-2">
+                        <div class="flex gap-1.5 shrink-0">
+                            <div class="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                        </div>
+                        <div class="bg-white border border-slate-200 rounded-lg text-xs text-slate-700 px-3 py-1.5 flex-1 min-w-0 ml-1.5 sm:ml-3 font-mono flex items-center gap-2 shadow-xs">
+                            <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            <div class="overflow-x-auto whitespace-nowrap scrollbar-thin py-0.5 select-all overscroll-x-contain w-full min-w-0">
+                                <span class="inline-block font-mono text-slate-700">{{ $scenario->content }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @else
+                <div class="bg-[#f0f4f8] p-4 rounded-xl text-sm text-slate-700 font-mono leading-relaxed whitespace-pre-line break-words mb-6 overflow-x-auto">
+                    {{ $scenario->content }}
+                </div>
+            @endif
             
             <form class="refresher-form" data-scenario-id="{{ $scenario->id }}" data-index="{{ $index }}">
                 @csrf

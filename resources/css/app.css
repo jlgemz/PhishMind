@@ -11,3 +11,19 @@
     --color-brand-dark: #0f172a;
     --color-brand-light: #f8fafc;
 }
+
+/* Custom scrollbar utility for horizontal address bars and code snippets */
+.scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+    height: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 9999px;
+}
