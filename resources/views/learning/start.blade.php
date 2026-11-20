@@ -34,14 +34,17 @@
             @php
                 $content = $scenario->content;
                 $isSms = $scenario->type === 'SMS Phishing';
-                $previewLabel = $isSms ? 'SMS preview' : 'Message preview';
+                $isEmail = $scenario->type === 'Email Phishing';
+                $previewLabel = $isEmail ? 'Email preview' : ($isSms ? 'SMS preview' : 'Message preview');
             @endphp
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div class="bg-[#f0f4f8] border-b border-slate-200 px-6 py-3 flex items-center gap-2 text-sm text-slate-600 font-semibold">
                     @if($isSms)
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                    @else
+                    @elseif($isEmail)
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    @else
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
                     @endif
                     {{ $previewLabel }}
                 </div>

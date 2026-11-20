@@ -136,10 +136,10 @@ class ScenarioSeeder extends Seeder
         if ($headers) {
             foreach ($headers as $i => $col) {
                 $col = strtolower(trim($col, " \"'\xEF\xBB\xBF"));
-                if (in_array($col, ['text', 'email text', 'body', 'content', 'message'])) {
+                if (in_array($col, ['cleaned_message', 'original_message', 'text', 'email text', 'body', 'content', 'message', 'subject'])) {
                     $textIdx = $i;
                 }
-                if (in_array($col, ['label', 'email type', 'class', 'target'])) {
+                if (in_array($col, ['final_label', 'verified_label', 'original_label', 'label', 'email type', 'class', 'target'])) {
                     $labelIdx = $i;
                 }
             }
