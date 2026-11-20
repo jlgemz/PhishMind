@@ -1,0 +1,12 @@
+/node_modules
+/vendor
+.env
+.env.backup
+.env.production
+.git
+.github
+.phpunit.cache
+*.log
+storage/*.key
+ml_service/venv
+ml_service/__pycache__

@@ -1,0 +1,508 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+
+class ThreatIntelligenceService
+{
+    protected $virustotalKey;
+    protected $googleSafeBrowsingKey;
+    protected $abuseIPDBKey;
+    protected $timeout;
+
+    public function __construct()
+    {
+        $this->virustotalKey = env('VIRUSTOTAL_API_KEY');
+        $this->googleSafeBrowsingKey = env('GOOGLE_SAFE_BROWSING_KEY');
+        $this->abuseIPDBKey = env('ABUSEIPDB_API_KEY');
+        $this->timeout = 15;
+    }
+
+    /**
+     * Comprehensive threat intelligence check
+     */
+    public function comprehensiveCheck(string $url): array
+    {
+        $domain = parse_url($url, PHP_URL_HOST);
+        $ip = gethostbyname($domain);
+        
+        $results = [
+            'virustotal' => $this->checkVirusTotal($url),
+            'google_safe_browsing' => $this->checkGoogleSafeBrowsing($url),
+        ];
+        
+        if (filter_var($ip, FILTER_VALIDATE_IP) && $ip !== $domain) {
+            $results['abuseipdb'] = $this->checkAbuseIPDB($ip);
+        }
+        
+        $results['threat_score'] = $this->calculateThreatScore($results);
+        $results['is_threat'] = $results['threat_score'] > 50;
+        $results['summary'] = $this->generateSummary($results);
+        
+        return $results;
+    }
+
+    /**
+     * Check URL with VirusTotal API - FIXED VERSION
+     */
+    public function checkVirusTotal(string $url): array
+    {
+        // Check if API key is set
+        if (empty($this->virustotalKey) || $this->virustotalKey === 'your_virustotal_api_key_here') {
+            Log::warning('VirusTotal API key not configured');
+            return $this->getDefaultResponse('disabled', 'VirusTotal API key not configured');
+        }
+
+        try {
+            $cacheKey = 'vt_' . md5($url);
+            
+            // Check cache first (valid for 6 hours)
+            if (Cache::has($cacheKey)) {
+                Log::info("VirusTotal result from cache for: " . $url);
+                return Cache::get($cacheKey);
+            }
+
+            Log::info("Checking VirusTotal for: " . $url);
+
+            // STEP 1: Submit URL for scanning
+            $submitResponse = Http::timeout(10)
+                ->withHeaders([
+                    'x-apikey' => $this->virustotalKey,
+                    'Accept' => 'application/json',
+                ])
+                ->post('https://www.virustotal.com/api/v3/urls', [
+                    'url' => $url
+                ]);
+
+            // If submit fails, try to get existing analysis
+            if (!$submitResponse->successful()) {
+                $statusCode = $submitResponse->status();
+                $errorBody = $submitResponse->body();
+                
+                Log::warning("VirusTotal submit failed", [
+                    'status' => $statusCode,
+                    'body' => $errorBody
+                ]);
+
+                // Try to get existing analysis
+                $urlId = urlencode($url);
+                $getResponse = Http::timeout(10)
+                    ->withHeaders([
+                        'x-apikey' => $this->virustotalKey,
+                        'Accept' => 'application/json'
+                    ])
+                    ->get("https://www.virustotal.com/api/v3/urls/{$urlId}");
+
+                if ($getResponse->successful()) {
+                    $data = $getResponse->json();
+                    $result = $this->parseVirusTotalResponse($data);
+                    Cache::put($cacheKey, $result, 21600);
+                    return $result;
+                }
+
+                // Handle specific error codes
+                if ($statusCode === 401 || $statusCode === 403) {
+                    return $this->getDefaultResponse('auth_error', 'Invalid VirusTotal API key. Please check your configuration.');
+                }
+
+                if ($statusCode === 429) {
+                    return $this->getDefaultResponse('rate_limited', 'VirusTotal rate limit exceeded. Please try again later.');
+                }
+
+                return $this->getDefaultResponse('error', 'VirusTotal API error: ' . substr($errorBody, 0, 200));
+            }
+
+            $submitData = $submitResponse->json();
+            $analysisId = $submitData['data']['id'] ?? null;
+            
+            if (!$analysisId) {
+                Log::error("VirusTotal: No analysis ID in response");
+                return $this->getDefaultResponse('error', 'No analysis ID returned from VirusTotal');
+            }
+
+            Log::info("VirusTotal analysis ID: " . $analysisId);
+
+            // STEP 2: Get analysis results (with polling)
+            $maxAttempts = 5;
+            $attempts = 0;
+            $analysisResult = null;
+
+            while ($attempts < $maxAttempts) {
+                $attempts++;
+                
+                if ($attempts > 1) {
+                    sleep(2);
+                }
+
+                $analysisResponse = Http::timeout(10)
+                    ->withHeaders([
+                        'x-apikey' => $this->virustotalKey,
+                        'Accept' => 'application/json'
+                    ])
+                    ->get("https://www.virustotal.com/api/v3/analyses/{$analysisId}");
+
+                if (!$analysisResponse->successful()) {
+                    continue;
+                }
+
+                $analysisData = $analysisResponse->json();
+                $status = $analysisData['data']['attributes']['status'] ?? '';
+                
+                if ($status === 'completed') {
+                    $analysisResult = $analysisData;
+                    break;
+                } elseif ($status === 'failed') {
+                    break;
+                }
+            }
+
+            if (!$analysisResult) {
+                // Return queued status instead of waiting forever
+                $queuedResult = [
+                    'status' => 'queued',
+                    'message' => 'Analysis in progress. Results will be available later.',
+                    'detected' => false,
+                    'malicious' => 0,
+                    'suspicious' => 0,
+                    'undetected' => 0,
+                    'harmless' => 0,
+                    'total' => 0,
+                    'scan_date' => now()->toDateTimeString()
+                ];
+                Cache::put($cacheKey, $queuedResult, 1800); // Cache for 30 minutes
+                return $queuedResult;
+            }
+
+            // Parse results
+            $result = $this->parseVirusTotalResponse($analysisResult);
+            Cache::put($cacheKey, $result, 21600); // Cache for 6 hours
+            
+            Log::info("VirusTotal check completed", ['result' => $result]);
+            return $result;
+
+        } catch (\Exception $e) {
+            Log::error("VirusTotal error: " . $e->getMessage());
+            return $this->getDefaultResponse('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Parse VirusTotal API response
+     */
+    protected function parseVirusTotalResponse(array $data): array
+    {
+        $stats = [];
+        
+        // Try different possible locations for stats
+        if (isset($data['data']['attributes']['last_analysis_stats'])) {
+            $stats = $data['data']['attributes']['last_analysis_stats'];
+        } elseif (isset($data['data']['attributes']['stats'])) {
+            $stats = $data['data']['attributes']['stats'];
+        }
+        
+        $malicious = $stats['malicious'] ?? 0;
+        $suspicious = $stats['suspicious'] ?? 0;
+        $undetected = $stats['undetected'] ?? 0;
+        $harmless = $stats['harmless'] ?? 0;
+        $total = $malicious + $suspicious + $undetected + $harmless;
+        
+        return [
+            'status' => 'success',
+            'malicious' => $malicious,
+            'suspicious' => $suspicious,
+            'undetected' => $undetected,
+            'harmless' => $harmless,
+            'total' => $total ?: 0,
+            'detected' => $malicious > 0,
+            'scan_date' => now()->toDateTimeString(),
+            'message' => $malicious > 0 ? "Detected by {$malicious} antivirus engines" : 'Clean on VirusTotal'
+        ];
+    }
+
+    /**
+     * Get default response
+     */
+    protected function getDefaultResponse(string $status, string $message): array
+    {
+        return [
+            'status' => $status,
+            'message' => $message,
+            'detected' => false,
+            'malicious' => 0,
+            'suspicious' => 0,
+            'undetected' => 0,
+            'harmless' => 0,
+            'total' => 0,
+            'scan_date' => now()->toDateTimeString()
+        ];
+    }
+
+    /**
+     * Check URL with Google Safe Browsing API
+     */
+    public function checkGoogleSafeBrowsing(string $url): array
+    {
+        if (empty($this->googleSafeBrowsingKey) || $this->googleSafeBrowsingKey === 'your_google_safe_browsing_key_here') {
+            return [
+                'status' => 'disabled', 
+                'message' => 'Google Safe Browsing API key not configured', 
+                'safe' => true,
+                'threats' => []
+            ];
+        }
+
+        try {
+            $cacheKey = 'gsb_' . md5($url);
+            if (Cache::has($cacheKey)) {
+                return Cache::get($cacheKey);
+            }
+
+            $response = Http::timeout(10)
+                ->post(
+                    "https://safebrowsing.googleapis.com/v4/threatMatches:find?key={$this->googleSafeBrowsingKey}",
+                    [
+                        'client' => [
+                            'clientId' => 'phishguard',
+                            'clientVersion' => '1.0.0'
+                        ],
+                        'threatInfo' => [
+                            'threatTypes' => [
+                                'MALWARE',
+                                'SOCIAL_ENGINEERING',
+                                'UNWANTED_SOFTWARE',
+                                'POTENTIALLY_HARMFUL_APPLICATION'
+                            ],
+                            'platformTypes' => ['ANY_PLATFORM'],
+                            'threatEntryTypes' => ['URL'],
+                            'threatEntries' => [
+                                ['url' => $url]
+                            ]
+                        ]
+                    ]
+                );
+
+            $result = [
+                'status' => 'success',
+                'safe' => true,
+                'threats' => []
+            ];
+            
+            if ($response->successful()) {
+                $data = $response->json();
+                if (isset($data['matches']) && count($data['matches']) > 0) {
+                    $result['safe'] = false;
+                    $result['threats'] = array_map(function($match) {
+                        return [
+                            'type' => $match['threatType'],
+                            'platform' => $match['platformType'],
+                            'cache_duration' => $match['cacheDuration'] ?? null
+                        ];
+                    }, $data['matches']);
+                }
+            }
+
+            Cache::put($cacheKey, $result, 3600);
+            return $result;
+
+        } catch (\Exception $e) {
+            Log::error("Google Safe Browsing error: " . $e->getMessage());
+            return [
+                'status' => 'error', 
+                'message' => $e->getMessage(), 
+                'safe' => true,
+                'threats' => []
+            ];
+        }
+    }
+
+    /**
+     * Check IP with AbuseIPDB
+     */
+    public function checkAbuseIPDB(string $ip): array
+    {
+        if (empty($this->abuseIPDBKey) || $this->abuseIPDBKey === 'your_abuseipdb_api_key_here') {
+            return ['status' => 'disabled', 'message' => 'AbuseIPDB API key not configured'];
+        }
+
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            return ['status' => 'error', 'message' => 'Invalid IP address'];
+        }
+
+        try {
+            $cacheKey = 'abuse_' . md5($ip);
+            if (Cache::has($cacheKey)) {
+                return Cache::get($cacheKey);
+            }
+
+            $response = Http::timeout(10)
+                ->withHeaders([
+                    'Key' => $this->abuseIPDBKey,
+                    'Accept' => 'application/json'
+                ])
+                ->get('https://api.abuseipdb.com/api/v2/check', [
+                    'ipAddress' => $ip,
+                    'maxAgeInDays' => 90
+                ]);
+
+            if (!$response->successful()) {
+                return ['status' => 'error', 'message' => 'AbuseIPDB API error'];
+            }
+
+            $data = $response->json();
+            $result = [
+                'status' => 'success',
+                'abuse_score' => $data['data']['abuseConfidenceScore'] ?? 0,
+                'is_abusive' => ($data['data']['abuseConfidenceScore'] ?? 0) > 30,
+                'total_reports' => $data['data']['totalReports'] ?? 0,
+                'last_reported' => $data['data']['lastReportedAt'] ?? null,
+                'country_code' => $data['data']['countryCode'] ?? null,
+                'isp' => $data['data']['isp'] ?? null,
+                'domain' => $data['data']['domain'] ?? null,
+                'usage_type' => $data['data']['usageType'] ?? null
+            ];
+
+            Cache::put($cacheKey, $result, 3600);
+            return $result;
+
+        } catch (\Exception $e) {
+            Log::error("AbuseIPDB error: " . $e->getMessage());
+            return ['status' => 'error', 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Calculate overall threat score
+     */
+    protected function calculateThreatScore(array $results): int
+    {
+        $score = 0;
+
+        // VirusTotal (max 40 points)
+        if (isset($results['virustotal']['status']) && $results['virustotal']['status'] === 'success') {
+            $malicious = $results['virustotal']['malicious'] ?? 0;
+            if ($malicious > 0) {
+                $score += min(40, $malicious * 8);
+            }
+        }
+
+        // Google Safe Browsing (max 30 points)
+        if (isset($results['google_safe_browsing']['status']) && $results['google_safe_browsing']['status'] === 'success') {
+            if (!$results['google_safe_browsing']['safe']) {
+                $score += 30;
+            }
+        }
+
+        // AbuseIPDB (max 30 points)
+        if (isset($results['abuseipdb']['status']) && $results['abuseipdb']['status'] === 'success') {
+            if ($results['abuseipdb']['is_abusive']) {
+                $score += min(30, $results['abuseipdb']['abuse_score'] / 3);
+            }
+        }
+
+        return min(100, $score);
+    }
+
+    /**
+     * Generate human-readable summary
+     */
+    protected function generateSummary(array $results): string
+    {
+        $summary = [];
+        
+        if (isset($results['virustotal']['status'])) {
+            $vt = $results['virustotal'];
+            if ($vt['status'] === 'success') {
+                if ($vt['detected']) {
+                    $summary[] = "Detected by {$vt['malicious']} antivirus engines on VirusTotal";
+                } else {
+                    $summary[] = "Clean on VirusTotal";
+                }
+            } elseif ($vt['status'] === 'queued') {
+                $summary[] = "VirusTotal analysis in progress...";
+            }
+        }
+        
+        if (isset($results['google_safe_browsing']['status']) && $results['google_safe_browsing']['status'] === 'success') {
+            $gsb = $results['google_safe_browsing'];
+            if (!$gsb['safe']) {
+                $types = array_column($gsb['threats'] ?? [], 'type');
+                $summary[] = "Flagged by Google Safe Browsing: " . implode(', ', $types);
+            } else {
+                $summary[] = "Clean on Google Safe Browsing";
+            }
+        }
+        
+        if (isset($results['abuseipdb']['status']) && $results['abuseipdb']['status'] === 'success') {
+            $abuse = $results['abuseipdb'];
+            if ($abuse['is_abusive']) {
+                $summary[] = "IP has abuse reports (score: {$abuse['abuse_score']}%)";
+            } else {
+                $summary[] = "IP has low abuse score ({$abuse['abuse_score']}%)";
+            }
+        }
+        
+        return implode(' | ', $summary);
+    }
+
+    /**
+     * Check if any API detected a threat
+     */
+    public function isThreatDetected(array $results): bool
+    {
+        if (isset($results['virustotal']['detected']) && $results['virustotal']['detected']) {
+            return true;
+        }
+        
+        if (isset($results['google_safe_browsing']['safe']) && !$results['google_safe_browsing']['safe']) {
+            return true;
+        }
+        
+        if (isset($results['abuseipdb']['is_abusive']) && $results['abuseipdb']['is_abusive']) {
+            return true;
+        }
+        
+        if (($results['threat_score'] ?? 0) > 50) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Test VirusTotal API connection
+     */
+    public function testVirusTotalConnection(): array
+    {
+        if (empty($this->virustotalKey)) {
+            return [
+                'status' => 'error',
+                'message' => 'VirusTotal API key not configured in .env file'
+            ];
+        }
+
+        try {
+            // Test with a simple URL
+            $response = Http::timeout(10)
+                ->withHeaders([
+                    'x-apikey' => $this->virustotalKey,
+                    'Accept' => 'application/json'
+                ])
+                ->get('https://www.virustotal.com/api/v3/urls/' . urlencode('https://google.com'));
+
+            return [
+                'status' => $response->successful() ? 'success' : 'error',
+                'status_code' => $response->status(),
+                'message' => $response->successful() ? 'API key is valid and working' : $response->body(),
+                'api_key_preview' => substr($this->virustotalKey, 0, 10) . '...' . substr($this->virustotalKey, -5)
+            ];
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'message' => 'Connection error: ' . $e->getMessage()
+            ];
+        }
+    }
+}

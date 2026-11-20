@@ -1,0 +1,129 @@
+import re
+import urllib.parse
+import tldextract
+from datetime import datetime
+import whois
+import socket
+import math
+
+class FeatureExtractor:
+    def __init__(self):
+        self.suspicious_keywords = [
+            'login', 'verify', 'update', 'confirm', 'secure', 'banking',
+            'account', 'password', 'credential', 'signin', 'authenticate',
+            'validate', 'recover', 'reset', 'activate', 'authorize',
+            'verification', 'security', 'alert', 'warning', 'suspicious',
+            'paypal', 'amazon', 'google', 'facebook', 'microsoft', 'apple'
+        ]
+        
+        self.suspicious_tlds = [
+            '.tk', '.ml', '.ga', '.cf', '.top', '.xyz', '.work',
+            '.date', '.download', '.bid', '.win', '.club', '.online',
+            '.site', '.space', '.tech', '.store', '.shop', '.live'
+        ]
+
+    def extract_features(self, url):
+        """Extract all features from URL for ML prediction"""
+        features = {}
+        
+        # Parse URL
+        parsed = urllib.parse.urlparse(url)
+        domain_info = tldextract.extract(url)
+        
+        # 1. URL Length Features
+        features['url_length'] = len(url)
+        features['domain_length'] = len(domain_info.domain)
+        features['path_length'] = len(parsed.path)
+        features['query_length'] = len(parsed.query) if parsed.query else 0
+        
+        # 2. Special Character Features
+        features['num_dots'] = url.count('.')
+        features['num_hyphens'] = url.count('-')
+        features['num_underscores'] = url.count('_')
+        features['num_slashes'] = url.count('/')
+        features['num_question_marks'] = url.count('?')
+        features['num_equal_signs'] = url.count('=')
+        features['num_at_signs'] = url.count('@')
+        features['num_percent_signs'] = url.count('%')
+        features['num_digits'] = sum(c.isdigit() for c in url)
+        
+        # 3. Security Features
+        features['has_https'] = 1 if url.startswith('https://') else 0
+        features['has_ip'] = 1 if self.has_ip_address(url) else 0
+        features['has_suspicious_keyword'] = 1 if self.has_suspicious_keyword(url) else 0
+        features['has_suspicious_tld'] = 1 if self.has_suspicious_tld(url) else 0
+        
+        # 4. Domain Features
+        features['subdomain_count'] = len(domain_info.subdomain.split('.')) if domain_info.subdomain else 0
+        features['domain_entropy'] = self.calculate_entropy(domain_info.domain)
+        
+        # 5. URL Structure Features
+        features['has_query_string'] = 1 if parsed.query else 0
+        features['has_fragment'] = 1 if parsed.fragment else 0
+        
+        # 6. Domain Age (if available)
+        domain_age = self.get_domain_age(domain_info.registered_domain)
+        features['domain_age_days'] = domain_age if domain_age else 0
+        
+        # 7. Brand Spoofing Detection
+        features['has_brand_spoofing'] = 1 if self.check_brand_spoofing(url) else 0
+        
+        # 8. Ratio Features
+        features['digit_ratio'] = features['num_digits'] / max(1, len(url))
+        features['special_char_ratio'] = (features['num_dots'] + features['num_hyphens'] + 
+                                         features['num_underscores'] + features['num_slashes']) / max(1, len(url))
+        
+        return features
+
+    def has_ip_address(self, url):
+        """Check if URL contains IP address"""
+        ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
+        return bool(re.search(ip_pattern, url))
+
+    def has_suspicious_keyword(self, url):
+        """Check for suspicious keywords in URL"""
+        url_lower = url.lower()
+        return any(keyword in url_lower for keyword in self.suspicious_keywords)
+
+    def has_suspicious_tld(self, url):
+        """Check for suspicious TLD"""
+        return any(url.endswith(tld) for tld in self.suspicious_tlds)
+
+    def calculate_entropy(self, string):
+        """Calculate Shannon entropy of a string"""
+        if not string:
+            return 0
+        entropy = 0
+        for x in range(256):
+            p_x = float(string.count(chr(x))) / len(string)
+            if p_x > 0:
+                entropy += - p_x * (p_x.bit_length())
+        return entropy
+
+    def get_domain_age(self, domain):
+        """Get domain age in days using WHOIS"""
+        try:
+            w = whois.whois(domain)
+            if w.creation_date:
+                if isinstance(w.creation_date, list):
+                    creation_date = w.creation_date[0]
+                else:
+                    creation_date = w.creation_date
+                if creation_date:
+                    age = (datetime.now() - creation_date).days
+                    return age
+        except:
+            pass
+        return None
+
+    def check_brand_spoofing(self, url):
+        """Check for brand spoofing attempts"""
+        popular_brands = ['google', 'facebook', 'amazon', 'microsoft', 'apple', 
+                         'paypal', 'bank', 'secure', 'account', 'login']
+        url_lower = url.lower()
+        for brand in popular_brands:
+            if brand in url_lower:
+                parsed = urllib.parse.urlparse(url)
+                if brand in parsed.netloc.lower() or brand in parsed.path.lower():
+                    return True
+        return False

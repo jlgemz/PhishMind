@@ -1,0 +1,6 @@
+Probe,Target_URI,HTTP_Status,Latency_ms,Result,Details
+As-Configured Env Host,0.0.0.0:11501/api/tags,N/A,0,FAIL,InvalidSchema: No connection adapters were found for '0.0.0.0:11501/api/tags'
+Normalized Localhost URI,http://127.0.0.1:11501/api/tags,200,49.15,SUCCESS,"Available models: ['qwen3.5:4b', 'qwen3.5:2b']"
+Model Metadata (qwen3.5:2b),http://127.0.0.1:11501/api/show,200,13.7,SUCCESS,"Family: qwen35, Size: 1.9B, Quant: Q8_0"
+As-Is Qwen3.5:2B Inference (num_predict=400),http://127.0.0.1:11501/api/generate,200,23878.89,SUCCESS,"response='OK', thinking_len=948, done_reason=stop"
+"Optimized Inference (think=False, num_gpu=0)",http://127.0.0.1:11501/api/generate,200,2510.47,SUCCESS,"Response generated (157 chars): An unexpected login link indicates your credentials were stolen or compromised, ..."
