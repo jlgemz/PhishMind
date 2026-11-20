@@ -46,13 +46,18 @@ class PHPMailerService
                 ],
             ];
 
-            $fromAddress = config('mail.from.address') ?: env('MAIL_FROM_ADDRESS') ?: $username ?: 'noreply@phishmind.edu';
+            $mail->CharSet  = 'UTF-8';
+            $mail->Encoding = 'base64';
+
+            // For Gmail SMTP, the From address MUST match the authenticated Gmail account
+            // to pass Google's strict SPF/DMARC anti-spoofing filters and land in the Inbox
+            $fromAddress = $username ?: (config('mail.from.address') ?: env('MAIL_FROM_ADDRESS', 'noreply@phishmind.edu'));
             $fromName    = config('mail.from.name') ?: env('MAIL_FROM_NAME', 'PhishMind Security');
 
             $mail->setFrom($fromAddress, $fromName);
             $mail->addAddress($toEmail);
             $mail->isHTML(true);
-            $mail->Subject = 'PhishMind - Account Validation';
+            $mail->Subject = 'PhishMind - Your Verification Code: ' . $otpCode;
 
             $mail->Body = "
                 <div style='font-family:Arial,sans-serif;max-width:500px;margin:auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;text-align:center;'>
