@@ -11,10 +11,17 @@ if [ -n "$PORT" ] && [ "$PORT" != "80" ]; then
     sed -i "s/:80/:$PORT/g" /etc/apache2/sites-available/*.conf 2>/dev/null || true
 fi
 
+# Set HTTPS and public URLs for Railway if available
+if [ -n "$RAILWAY_PUBLIC_DOMAIN" ]; then
+    export APP_URL="${APP_URL:-https://$RAILWAY_PUBLIC_DOMAIN}"
+    export ASSET_URL="${ASSET_URL:-https://$RAILWAY_PUBLIC_DOMAIN}"
+fi
+
 # Ensure storage directory structure and permissions
 mkdir -p /var/www/html/storage/framework/{sessions,views,cache} /var/www/html/storage/logs
-chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/www/html/public/build 2>/dev/null || true
+chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
+chmod -R 755 /var/www/html/public/build 2>/dev/null || true
 
 # Run database migrations and seeding
 if [ "$RUN_MIGRATIONS" = "true" ] || [ -n "$DB_HOST" ] || [ -n "$MYSQLHOST" ]; then
