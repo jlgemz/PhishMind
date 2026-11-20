@@ -8,9 +8,9 @@
 </div>
 @endif
 
-<div class="mb-6 flex justify-between items-center">
-    <p class="text-slate-600">Create, edit, approve, or delete practice scenarios.</p>
-    <a href="{{ route('admin.scenarios.create') }}" class="bg-brand-teal text-white px-4 py-2 rounded-lg font-bold hover:bg-teal-700 transition">
+<div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+    <p class="text-slate-600 text-sm sm:text-base">Create, edit, approve, or delete practice scenarios.</p>
+    <a href="{{ route('admin.scenarios.create') }}" class="w-full sm:w-auto text-center bg-brand-teal text-white px-4 py-2.5 rounded-lg font-bold hover:bg-teal-700 transition min-h-[44px] flex items-center justify-center text-sm">
         + Add Scenario
     </a>
 </div>

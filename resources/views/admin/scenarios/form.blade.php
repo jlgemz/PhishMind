@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 @section('header', isset($scenario) ? 'Edit Scenario' : 'Create Scenario')
 @section('content')
-<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 max-w-3xl">
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 sm:p-8 max-w-3xl">
     <form action="{{ isset($scenario) ? route('admin.scenarios.update', $scenario->id) : route('admin.scenarios.store') }}" method="POST">
         @csrf
         @if(isset($scenario)) @method('PUT') @endif

@@ -4,7 +4,7 @@
 
 <!-- PERSONALIZED REFRESHER BANNER -->
 @if($refresherDue)
-<div class="bg-brand-dark rounded-2xl p-6 text-white mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+<div class="bg-brand-dark rounded-2xl p-5 sm:p-6 text-white mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
     <div class="flex items-center gap-4">
         <div class="w-12 h-12 bg-brand-teal rounded-xl flex items-center justify-center shrink-0">
             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -12,12 +12,12 @@
             </svg>
         </div>
         <div>
-            <p class="text-xs text-brand-teal font-bold uppercase tracking-wider mb-1">Time for a refresher</p>
-            <h3 class="text-lg font-bold mb-1">Your personalized review is ready</h3>
-            <p class="text-sm text-slate-300">5 scenarios · about 5 minutes · weighted toward your weakest indicator</p>
+            <p class="text-xs text-teal-300 font-bold uppercase tracking-wider mb-1">Time for a refresher</p>
+            <h3 class="text-base sm:text-lg font-bold mb-1">Your personalized review is ready</h3>
+            <p class="text-xs sm:text-sm text-slate-300">5 scenarios · about 5 minutes · weighted toward your weakest indicator</p>
         </div>
     </div>
-    <a href="{{ route('refresher.start') }}" class="bg-brand-teal hover:bg-teal-700 text-white px-6 py-3 rounded-lg font-bold text-sm transition flex items-center gap-2 shrink-0">
+    <a href="{{ route('refresher.start') }}" class="w-full sm:w-auto text-center justify-center bg-brand-teal hover:bg-teal-700 text-white px-6 py-3 rounded-xl font-bold text-sm transition flex items-center gap-2 shrink-0 min-h-[44px]">
         Start Refresher &rarr;
     </a>
 </div>

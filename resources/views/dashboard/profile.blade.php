@@ -13,14 +13,14 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <!-- Progress by Scenario -->
-        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 shadow-xs">
             <div class="flex justify-between items-center mb-6">
                 <div>
-                    <h3 class="text-lg font-bold text-slate-800">Progress by scenario</h3>
-                    <p class="text-sm text-slate-500">{{ $stats['totalAttempts'] }} total practice items</p>
+                    <h3 class="text-base sm:text-lg font-bold text-slate-800">Progress by scenario</h3>
+                    <p class="text-xs sm:text-sm text-slate-500">{{ $stats['totalAttempts'] }} total practice items</p>
                 </div>
                 <div class="text-right">
-                    <p class="text-2xl font-bold text-slate-800">{{ $stats['accuracy'] }}%</p>
+                    <p class="text-xl sm:text-2xl font-bold text-slate-800">{{ $stats['accuracy'] }}%</p>
                     <p class="text-xs text-slate-500">accuracy</p>
                 </div>
             </div>
@@ -67,7 +67,7 @@
     </div>
 
     <!-- Progress by Indicator -->
-    <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm mb-6">
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 shadow-xs mb-6">
         <div class="flex justify-between items-center mb-6">
             <div>
                 <h3 class="text-lg font-bold text-slate-800">Progress by Indicator</h3>
@@ -155,21 +155,21 @@
                     (currentFilter === 'correct' && {{ $record->mastery_achieved ? 'true' : 'false' }}) || 
                     (currentFilter === 'review' && {{ $record->mastery_achieved ? 'false' : 'true' }})) 
                     && (showAll || {{ $index }} < 3)" 
-                    class="p-6 flex justify-between items-center transition hover:bg-slate-50 block">
+                    class="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 transition hover:bg-slate-50 block">
                     
                     <div>
                         <p class="font-bold text-slate-800 text-sm">
                             {{ $record->scenario?->type ?? 'Unknown' }}
                         </p>
                         <p class="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> 
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> 
                             {{ $record->created_at->setTimezone(config('app.timezone'))->format('M d, Y g:i A') }}
                         </p>
                         <p class="text-xs text-slate-400 mt-1 truncate max-w-xs">{{ Str::limit($record->scenario_url, 50) }}</p>
                     </div>
-                    <div class="flex items-center gap-8">
-                        <div class="text-right">
-                            <p class="text-xs text-slate-500 mb-0.5">Your choice</p>
+                    <div class="flex items-center justify-between sm:justify-end gap-4 sm:gap-8 pt-2 sm:pt-0 border-t sm:border-0 border-slate-100">
+                        <div class="text-left sm:text-right">
+                            <p class="text-[11px] text-slate-500 mb-0.5">Your choice</p>
                             <p class="font-semibold text-slate-800 text-sm">{{ $record->student_decision ? 'Phishing' : 'Legitimate' }}</p>
                         </div>
                         

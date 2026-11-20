@@ -23,14 +23,14 @@
 @endif
 
 <div class="max-w-4xl mx-auto">
-    <div class="bg-brand-dark rounded-2xl p-8 text-white mb-8">
+    <div class="bg-brand-dark rounded-2xl p-5 sm:p-8 text-white mb-8">
         <h2 class="text-2xl font-bold mb-2">Personalized Refresher</h2>
         <p class="text-slate-300">5 scenarios · about 5 minutes</p>
     </div>
 
     <div id="refresher-container" class="space-y-6">
         @foreach($questions as $index => $scenario)
-        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm {{ $index > 0 ? 'hidden' : '' }}" data-index="{{ $index }}">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 shadow-sm {{ $index > 0 ? 'hidden' : '' }}" data-index="{{ $index }}">
             <p class="text-sm font-bold text-slate-500 mb-2">QUESTION {{ $index + 1 }} OF {{ $questions->count() }}</p>
             <div class="bg-[#f0f4f8] p-4 rounded-xl text-sm text-slate-700 font-mono leading-relaxed break-words mb-6">
                 {{ $scenario->content }}
@@ -43,14 +43,14 @@
                 <input type="hidden" name="student_decision" class="student-decision" value="">
                 
                 <div class="flex gap-4 mb-6">
-                    <button type="button" class="decision-btn flex-1 border rounded-lg py-3 font-bold text-slate-600 hover:border-brand-teal" data-value="1">Phishing</button>
-                    <button type="button" class="decision-btn flex-1 border rounded-lg py-3 font-bold text-slate-600 hover:border-brand-teal" data-value="0">Legitimate</button>
+                    <button type="button" class="decision-btn flex-1 border rounded-lg py-3 min-h-[44px] font-bold text-slate-600 hover:border-brand-teal" data-value="1">Phishing</button>
+                    <button type="button" class="decision-btn flex-1 border rounded-lg py-3 min-h-[44px] font-bold text-slate-600 hover:border-brand-teal" data-value="0">Legitimate</button>
                 </div>
 
                 <input type="hidden" name="student_reasoning" value="Refresher practice">
 
                 <div class="flex justify-end">
-                    <button type="submit" class="bg-brand-teal text-white px-6 py-2 rounded-lg font-bold hover:bg-teal-700" disabled>Submit</button>
+                    <button type="submit" class="bg-brand-teal text-white px-6 py-2.5 min-h-[44px] rounded-lg font-bold hover:bg-teal-700 transition" disabled>Submit</button>
                 </div>
             </form>
         </div>

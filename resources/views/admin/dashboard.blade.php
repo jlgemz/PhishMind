@@ -16,7 +16,7 @@
 
 <!-- SYSTEM MONITOR SECTION -->
 <div class="mb-8" x-data="systemMonitor()">
-    <div class="flex justify-between items-end mb-4">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 mb-4">
         <div>
             <h2 class="text-2xl font-bold text-slate-800 mb-1">System Services</h2>
             <p class="text-slate-500 text-sm">Toggle the ML and Ollama services on or off.</p>

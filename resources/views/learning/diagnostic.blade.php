@@ -2,23 +2,23 @@
 @section('header', 'Diagnostic')
 @section('content')
 <div class="max-w-4xl mx-auto">
-    <div class="bg-brand-dark rounded-2xl p-8 text-white mb-8">
-        <p class="text-xs font-bold text-brand-teal uppercase tracking-wider mb-2">Welcome to PhishMind</p>
-        <h2 class="text-2xl font-bold mb-2">Personalize your learning</h2>
-        <p class="text-slate-300">Answer 5 quick scenarios so we can tailor your practice to your weaknesses.</p>
+    <div class="bg-brand-dark rounded-2xl p-5 sm:p-8 text-white mb-6 sm:mb-8 shadow-xs">
+        <p class="text-xs font-bold text-teal-300 uppercase tracking-wider mb-2">Welcome to PhishMind</p>
+        <h2 class="text-xl sm:text-2xl font-bold mb-2">Personalize your learning</h2>
+        <p class="text-xs sm:text-sm text-slate-300">Answer 5 quick scenarios so we can tailor your practice to your weaknesses.</p>
     </div>
 
     <div id="diagnostic-container" class="space-y-6">
         @foreach($questions as $index => $scenario)
-        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm {{ $index > 0 ? 'hidden' : '' }}" data-index="{{ $index }}">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 shadow-xs {{ $index > 0 ? 'hidden' : '' }}" data-index="{{ $index }}">
             <div class="flex justify-between items-center mb-4">
-                <p class="text-sm font-bold text-slate-500">QUESTION {{ $index + 1 }} OF {{ $questions->count() }}</p>
-                <div class="w-32 bg-slate-100 rounded-full h-2">
+                <p class="text-xs sm:text-sm font-bold text-slate-500">QUESTION {{ $index + 1 }} OF {{ $questions->count() }}</p>
+                <div class="w-24 sm:w-32 bg-slate-100 rounded-full h-2">
                     <div class="bg-brand-teal h-2 rounded-full" style="width: {{ round((($index) / $questions->count()) * 100) }}%"></div>
                 </div>
             </div>
 
-            <div class="bg-[#f0f4f8] p-4 rounded-xl text-sm text-slate-700 font-mono leading-relaxed break-words mb-6">
+            <div class="bg-[#f0f4f8] p-4 rounded-xl text-xs sm:text-sm text-slate-700 font-mono leading-relaxed break-words mb-6">
                 {{ $scenario->content }}
             </div>
 
@@ -27,13 +27,13 @@
                 <input type="hidden" name="scenario_id" value="{{ $scenario->id }}">
                 <input type="hidden" name="student_decision" class="student-decision" value="">
 
-                <div class="flex gap-4 mb-6">
-                    <button type="button" class="decision-btn flex-1 border border-slate-200 rounded-lg py-3 font-bold text-slate-600 hover:border-brand-teal transition" data-value="1">Phishing</button>
-                    <button type="button" class="decision-btn flex-1 border border-slate-200 rounded-lg py-3 font-bold text-slate-600 hover:border-brand-teal transition" data-value="0">Legitimate</button>
+                <div class="flex gap-3 sm:gap-4 mb-6">
+                    <button type="button" class="decision-btn flex-1 border border-slate-200 rounded-xl py-3 font-bold text-slate-600 hover:border-brand-teal transition min-h-[44px]" data-value="1">Phishing</button>
+                    <button type="button" class="decision-btn flex-1 border border-slate-200 rounded-xl py-3 font-bold text-slate-600 hover:border-brand-teal transition min-h-[44px]" data-value="0">Legitimate</button>
                 </div>
 
                 <div class="flex justify-end">
-                    <button type="submit" class="bg-brand-teal text-white px-6 py-2 rounded-lg font-bold hover:bg-teal-700 transition disabled:bg-slate-300 disabled:cursor-not-allowed" disabled>Submit &rarr;</button>
+                    <button type="submit" class="w-full sm:w-auto bg-brand-teal text-white px-6 py-2.5 rounded-xl font-bold hover:bg-teal-700 transition disabled:bg-slate-300 disabled:cursor-not-allowed min-h-[44px] flex items-center justify-center" disabled>Submit &rarr;</button>
                 </div>
             </form>
         </div>

@@ -25,7 +25,7 @@
     </div>
     @endif
 
-    <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm mb-6">
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 shadow-sm mb-6">
         <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">CONTENT</p>
         <div class="bg-[#f0f4f8] p-4 rounded-xl text-sm text-slate-700 font-mono break-words mb-6">
             {{ $scenario->content }}

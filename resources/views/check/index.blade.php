@@ -12,39 +12,39 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Form -->
-        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 shadow-xs">
             <form action="{{ route('check.analyze') }}" method="POST">
                 @csrf
                 <div class="mb-6">
                     <label class="block text-sm font-bold text-slate-800 mb-3">Content type</label>
-                    <div class="flex flex-wrap gap-3">
-                        <label class="cursor-pointer">
+                    <div class="flex flex-wrap gap-2.5 sm:gap-3">
+                        <label class="cursor-pointer flex-1 sm:flex-none">
                             <input type="radio" name="type" value="url" class="peer sr-only" checked>
-                            <div class="flex items-center gap-2 border border-slate-200 rounded-lg px-5 py-2.5 text-slate-600 peer-checked:border-brand-teal peer-checked:bg-teal-50 peer-checked:text-brand-teal font-semibold transition">
+                            <div class="flex items-center justify-center gap-2 border border-slate-200 rounded-xl px-4 sm:px-5 py-2.5 text-slate-600 peer-checked:border-brand-teal peer-checked:bg-teal-50 peer-checked:text-brand-teal font-semibold transition min-h-[44px]">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg> URL
                             </div>
                         </label>
-                        <label class="cursor-pointer">
+                        <label class="cursor-pointer flex-1 sm:flex-none">
                             <input type="radio" name="type" value="email" class="peer sr-only">
-                            <div class="flex items-center gap-2 border border-slate-200 rounded-lg px-5 py-2.5 text-slate-600 peer-checked:border-brand-teal peer-checked:bg-teal-50 peer-checked:text-brand-teal font-semibold transition">
+                            <div class="flex items-center justify-center gap-2 border border-slate-200 rounded-xl px-4 sm:px-5 py-2.5 text-slate-600 peer-checked:border-brand-teal peer-checked:bg-teal-50 peer-checked:text-brand-teal font-semibold transition min-h-[44px]">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg> Email
                             </div>
                         </label>
-                        <label class="cursor-pointer">
+                        <label class="cursor-pointer flex-1 sm:flex-none">
                             <input type="radio" name="type" value="sms" class="peer sr-only">
-                            <div class="flex items-center gap-2 border border-slate-200 rounded-lg px-5 py-2.5 text-slate-600 peer-checked:border-brand-teal peer-checked:bg-teal-50 peer-checked:text-brand-teal font-semibold transition">
+                            <div class="flex items-center justify-center gap-2 border border-slate-200 rounded-xl px-4 sm:px-5 py-2.5 text-slate-600 peer-checked:border-brand-teal peer-checked:bg-teal-50 peer-checked:text-brand-teal font-semibold transition min-h-[44px]">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg> SMS
                             </div>
                         </label>
                     </div>
                 </div>
 
-                <div class="mb-8">
+                <div class="mb-6 sm:mb-8">
                     <label class="block text-sm font-bold text-slate-800 mb-2">Paste the content</label>
-                    <textarea name="content" rows="8" class="w-full border border-slate-200 rounded-lg p-4 text-sm font-mono focus:ring-2 focus:ring-brand-teal focus:border-brand-teal outline-none transition" placeholder="Paste a URL, email body, or SMS text..." required></textarea>
+                    <textarea name="content" rows="6" class="w-full border border-slate-200 rounded-xl p-4 text-sm font-mono focus:ring-2 focus:ring-brand-teal focus:border-brand-teal outline-none transition" placeholder="Paste a URL, email body, or SMS text..." required></textarea>
                 </div>
 
-                <button type="submit" class="bg-brand-teal hover:bg-teal-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition">
+                <button type="submit" class="w-full sm:w-auto justify-center bg-brand-teal hover:bg-teal-700 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition min-h-[44px]">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg> Analyze content
                 </button>
             </form>

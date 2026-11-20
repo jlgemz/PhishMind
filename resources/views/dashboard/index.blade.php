@@ -3,37 +3,37 @@
 @section('header', 'Dashboard')
 
 @section('content')
-<div class="mb-8 flex justify-between items-end">
+<div class="mb-6 sm:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
     <div>
         <p class="text-xs text-brand-teal font-semibold uppercase tracking-wider mb-1">WELCOME BACK</p>
-        <h2 class="text-3xl font-bold text-slate-800 mb-2">Good morning, {{ explode(' ', auth()->user()->name)[0] }}.</h2>
-        <p class="text-slate-600">Continue practicing how to inspect evidence before trusting familiar university messages.</p>
+        <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Good morning, {{ explode(' ', auth()->user()->name)[0] }}.</h2>
+        <p class="text-sm sm:text-base text-slate-600">Continue practicing how to inspect evidence before trusting familiar university messages.</p>
     </div>
-    <div class="flex gap-3">
-        <a href="{{ route('practice.select') }}" class="bg-brand-teal text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-teal-700 transition text-sm">Start Practice</a>
-        <a href="{{ route('check.index') }}" class="bg-white border border-slate-300 text-slate-700 px-5 py-2.5 rounded-lg font-semibold hover:bg-slate-50 transition text-sm">Check Content</a>
+    <div class="flex flex-wrap gap-2.5 sm:gap-3 w-full sm:w-auto">
+        <a href="{{ route('practice.select') }}" class="flex-1 sm:flex-none text-center bg-brand-teal text-white px-5 py-2.5 rounded-lg font-semibold hover:bg-teal-700 transition text-sm min-h-[44px] flex items-center justify-center">Start Practice</a>
+        <a href="{{ route('check.index') }}" class="flex-1 sm:flex-none text-center bg-white border border-slate-300 text-slate-700 px-5 py-2.5 rounded-lg font-semibold hover:bg-slate-50 transition text-sm min-h-[44px] flex items-center justify-center">Check Content</a>
     </div>
 </div>
 
 @if($stats['refresher_due'])
-<div class="bg-brand-dark rounded-2xl p-6 text-white mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+<div class="bg-brand-dark rounded-2xl p-5 sm:p-6 text-white mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
     <div>
-        <h3 class="text-lg font-bold mb-1">Time for a refresher!</h3>
-        <p class="text-sm text-slate-300">5 scenarios · about 5 minutes</p>
+        <h3 class="text-base sm:text-lg font-bold mb-1">Time for a refresher!</h3>
+        <p class="text-xs sm:text-sm text-slate-300">5 scenarios · about 5 minutes</p>
     </div>
-    <a href="{{ route('refresher.start') }}" class="bg-brand-teal text-white px-5 py-2.5 rounded-lg font-bold hover:bg-teal-700 transition">
+    <a href="{{ route('refresher.start') }}" class="w-full sm:w-auto text-center bg-brand-teal text-white px-5 py-2.5 rounded-lg font-bold hover:bg-teal-700 transition text-sm min-h-[44px] flex items-center justify-center">
         Start Refresher &rarr;
     </a>
 </div>
 @endif
 
 @if($stats['needs_diagnostic'])
-<div class="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 sm:p-6 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
     <div>
-        <h3 class="text-lg font-bold text-amber-800 mb-1">Take the diagnostic</h3>
-        <p class="text-sm text-amber-700">Complete 5 scenarios to personalize your practice.</p>
+        <h3 class="text-base sm:text-lg font-bold text-amber-800 mb-1">Take the diagnostic</h3>
+        <p class="text-xs sm:text-sm text-amber-700">Complete 5 scenarios to personalize your practice.</p>
     </div>
-    <a href="{{ route('diagnostic.start') }}" class="bg-amber-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-amber-600 transition">
+    <a href="{{ route('diagnostic.start') }}" class="w-full sm:w-auto text-center bg-amber-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-amber-600 transition text-sm min-h-[44px] flex items-center justify-center">
         Start Diagnostic &rarr;
     </a>
 </div>
@@ -41,15 +41,15 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Learning Profile Summary -->
-    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 shadow-xs">
         <div class="flex justify-between items-start mb-6">
             <div>
-                <h3 class="text-lg font-bold text-slate-800">Learning Profile summary</h3>
-                <p class="text-sm text-slate-500">Progress by scenario</p>
+                <h3 class="text-base sm:text-lg font-bold text-slate-800">Learning Profile summary</h3>
+                <p class="text-xs sm:text-sm text-slate-500">Progress by scenario</p>
             </div>
             <div class="text-right">
-                <span class="text-2xl font-bold text-slate-800">{{ $stats['accuracy'] }}%</span>
-                <p class="text-xs text-slate-500 mt-1">Overall accuracy</p>
+                <span class="text-xl sm:text-2xl font-bold text-slate-800">{{ $stats['accuracy'] }}%</span>
+                <p class="text-xs text-slate-500 mt-0.5">Overall accuracy</p>
             </div>
         </div>
 

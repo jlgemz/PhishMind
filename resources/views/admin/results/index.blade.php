@@ -3,7 +3,8 @@
 @section('content')
 
 <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-    <table class="w-full text-left text-sm">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm min-w-[640px]">
         <thead class="bg-slate-50 border-b border-slate-200 text-slate-500">
             <tr>
                 <th class="px-6 py-3 font-semibold">Student</th>
@@ -55,6 +56,7 @@
             @endforelse
         </tbody>
     </table>
+    </div>
 </div>
 
 <div class="mt-4">{{ $results->links() }}</div>

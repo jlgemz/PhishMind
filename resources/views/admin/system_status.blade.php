@@ -3,7 +3,7 @@
 
 @section('content')
 <div class="max-w-4xl mx-auto" x-data="systemMonitor()">
-    <div class="mb-8 flex justify-between items-end">
+    <div class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
         <div>
             <h2 class="text-3xl font-bold text-slate-800 mb-2">System Services Monitor</h2>
             <p class="text-slate-600">Check and control the ML and Ollama services.</p>
@@ -16,7 +16,7 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- ML Service -->
-        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 shadow-sm">
             <div class="flex justify-between items-start mb-4">
                 <div>
                     <h3 class="text-lg font-bold text-slate-800">ML Service</h3>
@@ -44,7 +44,7 @@
         </div>
 
         <!-- Ollama Service -->
-        <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 shadow-sm">
             <div class="flex justify-between items-start mb-4">
                 <div>
                     <h3 class="text-lg font-bold text-slate-800">Ollama</h3>
