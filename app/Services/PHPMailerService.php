@@ -13,7 +13,7 @@ class PHPMailerService
         $mail = new PHPMailer(true);
 
         try {
-            $port = (int) config('mail.mailers.smtp.port', 587);
+            $port = (int) config('mail.mailers.smtp.port', 443);
             $scheme = strtolower((string) config('mail.mailers.smtp.scheme', 'tls'));
 
             if ($port === 465 || $scheme === 'ssl' || $scheme === 'smtps') {
