@@ -6,8 +6,10 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-FROM php:8.3-apache
+FROM php:8.4-apache
 WORKDIR /var/www/html
+
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
 # Install system dependencies and PHP extensions
 RUN apt-get update && apt-get install -y \
