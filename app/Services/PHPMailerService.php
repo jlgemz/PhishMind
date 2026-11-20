@@ -13,52 +13,75 @@ class PHPMailerService
         $mail = new PHPMailer(true);
 
         try {
-            $port = (int) config('mail.mailers.smtp.port', 443);
-            $scheme = strtolower((string) config('mail.mailers.smtp.scheme', 'tls'));
+            $host = config('mail.mailers.smtp.host') ?: env('MAIL_HOST', 'smtp.gmail.com');
+            $username = config('mail.mailers.smtp.username') ?: env('MAIL_USERNAME');
+            $password = config('mail.mailers.smtp.password') ?: env('MAIL_PASSWORD');
+            $port = (int) (config('mail.mailers.smtp.port') ?: env('MAIL_PORT', 465));
+            $scheme = strtolower((string) (config('mail.mailers.smtp.scheme') ?: env('MAIL_ENCRYPTION', '')));
 
+            // If port 465 or scheme ssl, use SMTPS (465); otherwise use STARTTLS (587)
             if ($port === 465 || $scheme === 'ssl' || $scheme === 'smtps') {
                 $encryption = PHPMailer::ENCRYPTION_SMTPS;
+                $port = 465;
             } else {
                 $encryption = PHPMailer::ENCRYPTION_STARTTLS;
+                $port = 587;
             }
 
             $mail->isSMTP();
-            $mail->Host       = config('mail.mailers.smtp.host', 'smtp.gmail.com');
+            $mail->Host       = $host;
             $mail->SMTPAuth   = true;
-            $mail->Username   = config('mail.mailers.smtp.username');
-            $mail->Password   = config('mail.mailers.smtp.password');
+            $mail->Username   = $username;
+            $mail->Password   = $password;
             $mail->SMTPSecure = $encryption;
             $mail->Port       = $port;
-            $mail->Timeout    = 15;
+            $mail->Timeout    = 10;
 
-            $fromAddress = config('mail.from.address') ?: config('mail.mailers.smtp.username');
-            $fromName    = config('mail.from.name', 'PhishMind Security');
+            // Prevent SSL verification failures in container environments
+            $mail->SMTPOptions = [
+                'ssl' => [
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                    'allow_self_signed' => true,
+                ],
+            ];
+
+            $fromAddress = config('mail.from.address') ?: env('MAIL_FROM_ADDRESS') ?: $username ?: 'noreply@phishmind.edu';
+            $fromName    = config('mail.from.name') ?: env('MAIL_FROM_NAME', 'PhishMind Security');
 
             $mail->setFrom($fromAddress, $fromName);
-
             $mail->addAddress($toEmail);
             $mail->isHTML(true);
             $mail->Subject = 'PhishMind - Account Validation';
 
             $mail->Body = "
-                <div style='font-family:Arial;text-align:center;'>
-                    <h2>Welcome to PhishMind</h2>
-                    <p>Your verification code is:</p>
-                    <h1 style='color:#1a7f64;'>"
-                    . htmlspecialchars($otpCode, ENT_QUOTES, 'UTF-8') .
-                    "</h1>
-                    <p>This code expires in 15 minutes.</p>
+                <div style='font-family:Arial,sans-serif;max-width:500px;margin:auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;text-align:center;'>
+                    <h2 style='color:#0f172a;margin-bottom:8px;'>PhishMind Verification</h2>
+                    <p style='color:#64748b;font-size:14px;margin-bottom:20px;'>Your 6-digit verification code is:</p>
+                    <div style='background:#f0fdf4;border:1px solid #bbf7d0;padding:16px;border-radius:8px;display:inline-block;margin-bottom:20px;'>
+                        <span style='font-size:32px;font-weight:bold;letter-spacing:6px;color:#166534;font-family:monospace;'>"
+                        . htmlspecialchars($otpCode, ENT_QUOTES, 'UTF-8') .
+                        "</span>
+                    </div>
+                    <p style='color:#94a3b8;font-size:12px;margin:0;'>This code expires in 15 minutes. If you did not request this, please ignore this email.</p>
                 </div>
             ";
 
-            $mail->AltBody = "Your PhishMind verification code is: {$otpCode}";
+            $mail->AltBody = "Your PhishMind verification code is: {$otpCode} (expires in 15 minutes)";
 
-            return $mail->send();
+            $sent = $mail->send();
+            if ($sent) {
+                Log::info("OTP email successfully sent to {$toEmail} via {$host}:{$port}");
+            }
+            return $sent;
 
         } catch (Throwable $e) {
             Log::error('OTP email delivery failed', [
                 'recipient' => $toEmail,
-                'error' => $e->getMessage(),
+                'host'      => $mail->Host ?? 'unknown',
+                'port'      => $mail->Port ?? 'unknown',
+                'error'     => $e->getMessage(),
+                'errorInfo' => $mail->ErrorInfo ?? '',
             ]);
 
             return false;
