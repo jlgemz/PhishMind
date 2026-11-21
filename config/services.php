@@ -20,7 +20,7 @@ return [
 
     'resend' => [
         'key'  => env('RESEND_API_KEY'),
-        'from' => env('RESEND_FROM_EMAIL', 'PhishMind Security <onboarding@resend.dev>'),
+        'from' => env('RESEND_FROM_EMAIL', 'PhishMind Security <onboarding@phishmind.online>'),
     ],
 
     'ses' => [

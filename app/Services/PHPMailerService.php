@@ -30,7 +30,7 @@ class PHPMailerService
     {
         try {
             $from = config('services.resend.from') 
-                ?: env('RESEND_FROM_EMAIL', 'PhishMind Security <onboarding@resend.dev>');
+                ?: env('RESEND_FROM_EMAIL', 'PhishMind Security <onboarding@phishmind.online>');
 
             $html = $this->getOtpHtml($otpCode);
             $text = "Your PhishMind verification code is: {$otpCode} (expires in 15 minutes)";
