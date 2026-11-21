@@ -22,46 +22,55 @@ class DiagnosticController extends Controller
      * Show the diagnostic (5 scenarios for new users).
      * Resumes an in-progress diagnostic if the session still holds the IDs.
      */
+    /**
+     * Show the diagnostic (5 scenarios for new users covering URL, Email, and SMS).
+     * Resumes an in-progress diagnostic if the session holds the 5 IDs.
+     */
     public function start()
     {
         $userId = auth()->id();
 
-        // Already completed → never show again.
-        if (auth()->user()->diagnostic_completed_at) {
-            return redirect()->route('dashboard')
-                ->with('info', 'You have already completed the diagnostic.');
+        // Allow restarting the diagnostic via query param (e.g. /diagnostic?restart=1)
+        if (request()->has('restart') || request()->has('retake')) {
+            auth()->user()->update(['diagnostic_completed_at' => null]);
+            LearningRecord::where('user_id', $userId)
+                ->where('session_type', 'diagnostic')
+                ->delete();
+            session()->forget('diagnostic_scenario_ids');
         }
 
-        // Try to resume an in-progress diagnostic from the session.
+        // Already completed 5 questions → never show again (unless user restarted above).
+        if (auth()->user()->diagnostic_completed_at) {
+            $recordCount = LearningRecord::where('user_id', $userId)
+                ->where('session_type', 'diagnostic')
+                ->count();
+
+            // If user previously completed a buggy 3-question diagnostic, allow fresh 5-question retake
+            if ($recordCount < 5) {
+                auth()->user()->update(['diagnostic_completed_at' => null]);
+                LearningRecord::where('user_id', $userId)
+                    ->where('session_type', 'diagnostic')
+                    ->delete();
+                session()->forget('diagnostic_scenario_ids');
+            } else {
+                return redirect()->route('dashboard')
+                    ->with('info', 'You have already completed the diagnostic.');
+            }
+        }
+
+        // Try to resume an in-progress diagnostic of exactly 5 questions.
         $ids       = session('diagnostic_scenario_ids');
         $questions = collect();
 
-        if ($ids && count($ids) === 5) {
+        if (is_array($ids) && count($ids) === 5) {
             $questions = Scenario::whereIn('id', $ids)->get()
                 ->sortBy(fn ($q) => array_search($q->id, $ids))
                 ->values();
         }
 
-        // Otherwise, pick a fresh set of 5.
-        if ($questions->isEmpty()) {
-            $questions = Scenario::where('status', 'approved')
-                ->where('is_diagnostic', true)
-                ->inRandomOrder()
-                ->take(5)
-                ->get();
-
-            if ($questions->isEmpty()) {
-                $questions = Scenario::where('status', 'approved')
-                    ->inRandomOrder()
-                    ->take(5)
-                    ->get();
-            }
-
-            if ($questions->isEmpty()) {
-                return redirect()->route('dashboard')
-                    ->with('error', 'No scenarios available for the diagnostic.');
-            }
-
+        // Pick a balanced, multi-modal set of 5 scenarios (URL, Email, SMS)
+        if ($questions->count() !== 5) {
+            $questions = $this->getBalancedDiagnosticScenarios();
             session(['diagnostic_scenario_ids' => $questions->pluck('id')->toArray()]);
         }
 
@@ -72,11 +81,10 @@ class DiagnosticController extends Controller
             ->pluck('scenario_id')
             ->toArray();
 
-        $questions = $questions->reject(fn ($q) => in_array($q->id, $answeredIds))->values();
+        $remainingQuestions = $questions->reject(fn ($q) => in_array($q->id, $answeredIds))->values();
 
-        // Safety net: if everything in the session is already answered
-        // (e.g. last submit response was lost), mark complete now.
-        if ($questions->isEmpty()) {
+        // Safety net: if all 5 are answered, mark complete now.
+        if ($remainingQuestions->isEmpty()) {
             auth()->user()->update(['diagnostic_completed_at' => now()]);
             session()->forget('diagnostic_scenario_ids');
 
@@ -86,7 +94,89 @@ class DiagnosticController extends Controller
 
         session(['session_type' => 'diagnostic']);
 
-        return view('learning.diagnostic', compact('questions'));
+        // Pass the remaining questions and the total offset for progress tracking
+        $answeredCount = count($answeredIds);
+        $questions = $remainingQuestions;
+
+        return view('learning.diagnostic', compact('questions', 'answeredCount'));
+    }
+
+    /**
+     * Retrieve a balanced 5-question multi-modal diagnostic set:
+     * 2 URL scenarios (1 phishing, 1 legit),
+     * 2 Email scenarios (1 phishing, 1 legit),
+     * 1 SMS scenario (phishing or legit).
+     */
+    protected function getBalancedDiagnosticScenarios(): \Illuminate\Support\Collection
+    {
+        // 1. Fetch 2 URL Scenarios (1 phishing, 1 legitimate)
+        $urlPhish = Scenario::where('type', 'URL / Web Phishing')
+            ->where('status', 'approved')
+            ->where('is_phishing', true)
+            ->inRandomOrder()
+            ->first();
+
+        $urlLegit = Scenario::where('type', 'URL / Web Phishing')
+            ->where('status', 'approved')
+            ->where('is_phishing', false)
+            ->inRandomOrder()
+            ->first();
+
+        $urls = collect([$urlPhish, $urlLegit])->filter();
+        if ($urls->count() < 2) {
+            $moreUrls = Scenario::where('type', 'URL / Web Phishing')
+                ->where('status', 'approved')
+                ->whereNotIn('id', $urls->pluck('id'))
+                ->inRandomOrder()
+                ->take(2 - $urls->count())
+                ->get();
+            $urls = $urls->concat($moreUrls);
+        }
+
+        // 2. Fetch 2 Email Scenarios (1 phishing, 1 legitimate)
+        $emailPhish = Scenario::where('type', 'Email Phishing')
+            ->where('status', 'approved')
+            ->where('is_phishing', true)
+            ->inRandomOrder()
+            ->first();
+
+        $emailLegit = Scenario::where('type', 'Email Phishing')
+            ->where('status', 'approved')
+            ->where('is_phishing', false)
+            ->inRandomOrder()
+            ->first();
+
+        $emails = collect([$emailPhish, $emailLegit])->filter();
+        if ($emails->count() < 2) {
+            $moreEmails = Scenario::where('type', 'Email Phishing')
+                ->where('status', 'approved')
+                ->whereNotIn('id', $emails->pluck('id'))
+                ->inRandomOrder()
+                ->take(2 - $emails->count())
+                ->get();
+            $emails = $emails->concat($moreEmails);
+        }
+
+        // 3. Fetch 1 SMS Scenario
+        $sms = Scenario::where('type', 'SMS Phishing')
+            ->where('status', 'approved')
+            ->inRandomOrder()
+            ->take(1)
+            ->get();
+
+        $selected = $urls->concat($emails)->concat($sms);
+
+        // Fallback fill to guarantee exactly 5 scenarios
+        if ($selected->count() < 5) {
+            $more = Scenario::where('status', 'approved')
+                ->whereNotIn('id', $selected->pluck('id'))
+                ->inRandomOrder()
+                ->take(5 - $selected->count())
+                ->get();
+            $selected = $selected->concat($more);
+        }
+
+        return $selected->shuffle()->values();
     }
 
     /**

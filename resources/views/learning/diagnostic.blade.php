@@ -12,14 +12,33 @@
         @foreach($questions as $index => $scenario)
         <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-8 shadow-xs {{ $index > 0 ? 'hidden' : '' }}" data-index="{{ $index }}">
             <div class="flex justify-between items-center mb-4">
-                <p class="text-xs sm:text-sm font-bold text-slate-500">QUESTION {{ $index + 1 }} OF {{ $questions->count() }}</p>
+                <p class="text-xs sm:text-sm font-bold text-slate-500">QUESTION {{ ($answeredCount ?? 0) + $index + 1 }} OF 5</p>
                 <div class="w-24 sm:w-32 bg-slate-100 rounded-full h-2">
-                    <div class="bg-brand-teal h-2 rounded-full" style="width: {{ round((($index) / $questions->count()) * 100) }}%"></div>
+                    <div class="bg-brand-teal h-2 rounded-full" style="width: {{ round(((($answeredCount ?? 0) + $index + 1) / 5) * 100) }}%"></div>
                 </div>
             </div>
 
+            <div class="mb-3 flex items-center justify-between">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
+                    {{ $scenario->type === 'URL / Web Phishing' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                       ($scenario->type === 'Email Phishing' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                       'bg-emerald-50 text-emerald-700 border border-emerald-200') }}">
+                    @if($scenario->type === 'URL / Web Phishing')
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+                        URL Modality
+                    @elseif($scenario->type === 'Email Phishing')
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                        Email Modality
+                    @else
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        SMS Modality
+                    @endif
+                </span>
+                <span class="text-xs text-slate-400 font-medium">Evaluate the content below</span>
+            </div>
+
             @php
-                $isUrl = str_starts_with(trim($scenario->content), 'http://') || str_starts_with(trim($scenario->content), 'https://') || $scenario->type === 'URL / Web Phishing';
+                $isUrl = $scenario->type === 'URL / Web Phishing' || str_starts_with(trim($scenario->content), 'http://') || str_starts_with(trim($scenario->content), 'https://');
             @endphp
             @if($isUrl)
                 <div class="mb-6 bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
@@ -37,9 +56,25 @@
                         </div>
                     </div>
                 </div>
+            @elseif($scenario->type === 'Email Phishing')
+                <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs mb-6">
+                    <div class="bg-[#f0f4f8] border-b border-slate-200 px-4 py-2.5 flex items-center gap-2 text-xs font-semibold text-slate-600">
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                        Email Preview
+                    </div>
+                    <div class="p-4 sm:p-6 text-xs sm:text-sm text-slate-700 font-mono leading-relaxed whitespace-pre-line break-words overflow-x-auto">
+                        {{ $scenario->content }}
+                    </div>
+                </div>
             @else
-                <div class="bg-[#f0f4f8] p-4 rounded-xl text-xs sm:text-sm text-slate-700 font-mono leading-relaxed whitespace-pre-line break-words mb-6 overflow-x-auto">
-                    {{ $scenario->content }}
+                <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs mb-6">
+                    <div class="bg-[#f0f4f8] border-b border-slate-200 px-4 py-2.5 flex items-center gap-2 text-xs font-semibold text-slate-600">
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                        SMS Preview
+                    </div>
+                    <div class="p-4 sm:p-6 text-xs sm:text-sm text-slate-700 whitespace-pre-line break-words overflow-x-auto">
+                        {{ $scenario->content }}
+                    </div>
                 </div>
             @endif
 
