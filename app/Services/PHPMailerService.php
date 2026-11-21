@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use PHPMailer\PHPMailer\PHPMailer;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -10,29 +9,22 @@ use Throwable;
 class PHPMailerService
 {
     /**
-     * Send 6-digit OTP code to the recipient.
-     * Attempts Resend HTTP API first (port 443, cloud-friendly, zero firewall blocks),
-     * and automatically falls back to SMTP (PHPMailer) if Resend is unavailable.
+     * Send 6-digit OTP code directly to the registered user via Resend REST API (HTTPS port 443).
      */
     public function sendOTP(string $toEmail, string $otpCode): bool
     {
         $resendKey = config('services.resend.key') ?: env('RESEND_API_KEY');
 
-        // 1. Try Resend API first if key is configured
-        if (!empty($resendKey)) {
-            $sent = $this->sendViaResend($toEmail, $otpCode, $resendKey);
-            if ($sent) {
-                return true;
-            }
-            Log::info("Resend delivery unfulfilled for {$toEmail}, attempting SMTP fallback...");
+        if (empty($resendKey)) {
+            Log::error("Resend API key is missing. Please set RESEND_API_KEY in your environment.");
+            return false;
         }
 
-        // 2. Fall back to SMTP via PHPMailer
-        return $this->sendViaSmtp($toEmail, $otpCode);
+        return $this->sendViaResend($toEmail, $otpCode, $resendKey);
     }
 
     /**
-     * Send OTP via Resend REST API (HTTPS port 443).
+     * Send OTP via Resend REST API.
      */
     protected function sendViaResend(string $toEmail, string $otpCode, string $apiKey): bool
     {
@@ -60,82 +52,11 @@ class PHPMailerService
                 return true;
             }
 
-            Log::warning("Resend API rejected delivery to {$toEmail} (HTTP {$response->status()}): " . $response->body());
+            Log::error("Resend API rejected delivery to {$toEmail} (HTTP {$response->status()}): " . $response->body());
             return false;
 
         } catch (Throwable $e) {
-            Log::warning("Resend API request exception for {$toEmail}: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Send OTP via SMTP using PHPMailer.
-     */
-    protected function sendViaSmtp(string $toEmail, string $otpCode): bool
-    {
-        $mail = new PHPMailer(true);
-
-        try {
-            $host = config('mail.mailers.smtp.host') ?: env('MAIL_HOST', 'smtp.gmail.com');
-            $username = config('mail.mailers.smtp.username') ?: env('MAIL_USERNAME');
-            $password = config('mail.mailers.smtp.password') ?: env('MAIL_PASSWORD');
-            $port = (int) (config('mail.mailers.smtp.port') ?: env('MAIL_PORT', 465));
-            $scheme = strtolower((string) (config('mail.mailers.smtp.scheme') ?: env('MAIL_ENCRYPTION', '')));
-
-            if ($port === 465 || $scheme === 'ssl' || $scheme === 'smtps') {
-                $encryption = PHPMailer::ENCRYPTION_SMTPS;
-                $port = 465;
-            } else {
-                $encryption = PHPMailer::ENCRYPTION_STARTTLS;
-                $port = 587;
-            }
-
-            $mail->isSMTP();
-            $mail->Host       = $host;
-            $mail->SMTPAuth   = true;
-            $mail->Username   = $username;
-            $mail->Password   = $password;
-            $mail->SMTPSecure = $encryption;
-            $mail->Port       = $port;
-            $mail->Timeout    = 10;
-
-            $mail->SMTPOptions = [
-                'ssl' => [
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
-                    'allow_self_signed' => true,
-                ],
-            ];
-
-            $mail->CharSet  = 'UTF-8';
-            $mail->Encoding = 'base64';
-
-            $fromAddress = $username ?: (config('mail.from.address') ?: env('MAIL_FROM_ADDRESS', 'noreply@phishmind.edu'));
-            $fromName    = config('mail.from.name') ?: env('MAIL_FROM_NAME', 'PhishMind Security');
-
-            $mail->setFrom($fromAddress, $fromName);
-            $mail->addAddress($toEmail);
-            $mail->isHTML(true);
-            $mail->Subject = 'PhishMind - Your Verification Code: ' . $otpCode;
-            $mail->Body    = $this->getOtpHtml($otpCode);
-            $mail->AltBody = "Your PhishMind verification code is: {$otpCode} (expires in 15 minutes)";
-
-            $sent = $mail->send();
-            if ($sent) {
-                Log::info("OTP email successfully sent via SMTP to {$toEmail} via {$host}:{$port}");
-            }
-            return $sent;
-
-        } catch (Throwable $e) {
-            Log::error('SMTP email delivery failed', [
-                'recipient' => $toEmail,
-                'host'      => $mail->Host ?? 'unknown',
-                'port'      => $mail->Port ?? 'unknown',
-                'error'     => $e->getMessage(),
-                'errorInfo' => $mail->ErrorInfo ?? '',
-            ]);
-
+            Log::error("Resend API request exception for {$toEmail}: " . $e->getMessage());
             return false;
         }
     }
@@ -168,4 +89,5 @@ class PHPMailerService
         ";
     }
 }
+
 

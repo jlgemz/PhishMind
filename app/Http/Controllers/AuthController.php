@@ -114,8 +114,18 @@ class AuthController extends Controller
     {
         $otp = (string) rand(100000, 999999);
         $user->update(['otp_code' => $otp, 'otp_expires_at' => Carbon::now()->addMinutes(15)]);
-        session(['otp_hint' => $otp]);
         $this->mailer->sendOTP($user->email, $otp);
+    }
+
+    public function resendOtp()
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+        $this->sendOtp($user);
+        return back()->with('success', 'A new verification code has been sent to ' . $user->email);
     }
 
         // ============================================
@@ -144,10 +154,9 @@ class AuthController extends Controller
         // Send email
         $this->mailer->sendOTP($user->email, $otp);
 
-        // Store email and OTP hint in session to verify against later
+        // Store email in session to verify against later
         session([
             'reset_email' => $user->email,
-            'reset_otp_hint' => $otp,
         ]);
 
         return redirect()->route('password.verify')->with('success', 'Password reset code sent to your email.');
