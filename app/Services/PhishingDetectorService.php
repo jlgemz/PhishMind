@@ -26,8 +26,7 @@ class PhishingDetectorService
                 'signin', 'authenticate', 'validate', 'recover',
                 'reset', 'activate', 'authorize', 'verification',
                 'security', 'alert', 'warning', 'suspicious',
-                'paypal', 'amazon', 'google', 'facebook', 'microsoft',
-                'apple', 'bank', 'secure', 'online', 'access'
+                'billing', 'wallet', 'unlock', 'unauthorized', 're-activate'
             ],
             'suspicious_tlds' => [
                 '.tk', '.ml', '.ga', '.cf', '.top', '.xyz',
@@ -35,10 +34,24 @@ class PhishingDetectorService
                 '.club', '.online', '.site', '.space', '.tech',
                 '.store', '.shop', '.live', '.click', '.stream'
             ],
-            'suspicious_domains' => [
-                'google.com', 'facebook.com', 'amazon.com',
-                'microsoft.com', 'apple.com', 'paypal.com',
-                'netflix.com', 'spotify.com', 'twitter.com'
+            'authentic_brands' => [
+                'google'    => ['google.com', 'youtube.com', 'youtu.be', 'gmail.com'],
+                'youtube'   => ['youtube.com', 'youtu.be'],
+                'facebook'  => ['facebook.com', 'fb.com', 'fb.me', 'messenger.com'],
+                'meta'      => ['meta.com', 'facebook.com', 'instagram.com', 'whatsapp.com'],
+                'instagram' => ['instagram.com'],
+                'whatsapp'  => ['whatsapp.com'],
+                'twitter'   => ['twitter.com', 'x.com', 't.co'],
+                'x'         => ['x.com', 'twitter.com', 't.co'],
+                'apple'     => ['apple.com', 'icloud.com'],
+                'microsoft' => ['microsoft.com', 'live.com', 'office.com', 'outlook.com'],
+                'amazon'    => ['amazon.com'],
+                'paypal'    => ['paypal.com'],
+                'bdo'       => ['bdo.com.ph'],
+                'bpi'       => ['bpi.com.ph'],
+                'gcash'     => ['gcash.com'],
+                'smart'     => ['smart.com.ph'],
+                'globe'     => ['globe.com.ph'],
             ]
         ];
     }
@@ -132,18 +145,17 @@ class PhishingDetectorService
      */
     protected function parseURL(string $url): array
     {
-        $parts = parse_url($url);
-        $domain = $parts['host'] ?? $parts['path'] ?? '';
-        
-        // Clean domain
-        $domain = str_replace('www.', '', $domain);
+        $normalized = preg_match('#^[a-zA-Z]+://#', $url) ? $url : 'https://' . $url;
+        $parts = parse_url($normalized);
+        $host = strtolower($parts['host'] ?? '');
+        $domain = preg_replace('/^www\./i', '', $host);
         
         return [
-            'scheme' => $parts['scheme'] ?? 'http',
-            'host' => $parts['host'] ?? '',
+            'scheme' => $parts['scheme'] ?? 'https',
+            'host'   => $host,
             'domain' => $domain,
-            'path' => $parts['path'] ?? '',
-            'query' => $parts['query'] ?? ''
+            'path'   => $parts['path'] ?? '',
+            'query'  => $parts['query'] ?? ''
         ];
     }
 
@@ -152,7 +164,18 @@ class PhishingDetectorService
      */
     protected function checkSuspiciousKeywords(string $url): bool
     {
+        $parsed = $this->parseURL($url);
         $urlLower = strtolower($url);
+        
+        // Skip common clean paths on verified major domains
+        foreach ($this->rules['authentic_brands'] ?? [] as $validDomains) {
+            foreach ($validDomains as $valid) {
+                if ($parsed['host'] === $valid || str_ends_with($parsed['host'], '.' . $valid)) {
+                    return false;
+                }
+            }
+        }
+
         foreach ($this->rules['suspicious_keywords'] as $keyword) {
             if (strpos($urlLower, $keyword) !== false) {
                 return true;
@@ -188,7 +211,8 @@ class PhishingDetectorService
      */
     protected function countSubdomains(string $url): int
     {
-        $host = parse_url($url, PHP_URL_HOST);
+        $parsed = $this->parseURL($url);
+        $host = $parsed['host'];
         if (!$host) return 0;
         
         $parts = explode('.', $host);
@@ -215,7 +239,7 @@ class PhishingDetectorService
      */
     protected function hasValidSSL(string $url): bool
     {
-        return strpos($url, 'https://') === 0;
+        return str_starts_with($url, 'https://') || !preg_match('#^[a-zA-Z]+://#', $url);
     }
 
     /**
@@ -223,20 +247,21 @@ class PhishingDetectorService
      */
     protected function checkBrandSpoofing(string $url): bool
     {
-        $popularBrands = ['google', 'facebook', 'amazon', 'microsoft', 'apple', 
-                         'paypal', 'bank', 'secure', 'account', 'login'];
+        $parsed = $this->parseURL($url);
+        $host = $parsed['host'];
         $urlLower = strtolower($url);
-        
-        foreach ($popularBrands as $brand) {
-            if (strpos($urlLower, $brand) !== false) {
-                // Check if brand is in domain or path
-                $parsed = parse_url($url);
-                if (isset($parsed['host']) && strpos(strtolower($parsed['host']), $brand) !== false) {
-                    return true;
+
+        foreach ($this->rules['authentic_brands'] ?? [] as $brand => $validDomains) {
+            // If the host belongs to the authentic domain, it is NOT spoofing!
+            foreach ($validDomains as $valid) {
+                if ($host === $valid || str_ends_with($host, '.' . $valid)) {
+                    continue 2;
                 }
-                if (isset($parsed['path']) && strpos(strtolower($parsed['path']), $brand) !== false) {
-                    return true;
-                }
+            }
+
+            // If brand name appears in another domain or path, it is brand spoofing!
+            if (preg_match('/(?:^|[^a-z0-9])' . preg_quote($brand, '/') . '(?:[^a-z0-9]|$)/i', $urlLower)) {
+                return true;
             }
         }
         return false;

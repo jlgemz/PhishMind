@@ -10,9 +10,6 @@ if BASE_DIR not in sys.path:
 
 from model import PhishingMLModel
 from feature_extractor import FeatureExtractor
-from train_url_csv import train_url_model
-from train_email import train_email_model
-from train_sms import train_sms_model
 
 def train_master_model():
     print(f"\n{'='*60}\n🧠 TRAINING MASTER MULTI-MODAL RANDOM FOREST MODEL\n{'='*60}")
@@ -20,10 +17,15 @@ def train_master_model():
     extractor = FeatureExtractor()
     data, labels = [], []
 
+    # =========================================================================
     # 1. Collect URL Samples
+    # =========================================================================
+    print("👉 Collecting URL training samples...")
+    url_samples = []  # list of (url_string, label)
+
+    # 1a. url_dataset.csv
     url_file = os.path.join(BASE_DIR, "url_dataset.csv")
     if os.path.exists(url_file):
-        print("👉 Extracting URL dataset samples...")
         try:
             df_url = pd.read_csv(url_file, on_bad_lines='skip')
             df_url.columns = [str(c).strip().lower() for c in df_url.columns]
@@ -32,58 +34,169 @@ def train_master_model():
                 df_url['label'] = df_url['label'].astype(str).str.strip().str.lower()
                 u_legit = df_url[df_url['label'].isin(['0', 'legitimate', 'benign'])]
                 u_phish = df_url[df_url['label'].isin(['1', 'phishing', 'malicious'])]
-                
-                # Sample balanced subsets
+
                 target_count = min(len(u_legit), 2000)
                 u_legit_sample = u_legit.sample(n=target_count, random_state=42) if len(u_legit) > target_count else u_legit
-                u_phish_sample = u_phish.sample(n=target_count * 2, random_state=42) if len(u_phish) > target_count * 2 else u_phish
+                u_phish_sample = u_phish.sample(n=target_count, random_state=42) if len(u_phish) > target_count else u_phish
 
-                for _, r in pd.concat([u_legit_sample, u_phish_sample]).iterrows():
-                    u = str(r['url']).strip()
-                    if not u.startswith(('http://', 'https://')):
-                        u = 'https://' + u
-                    lbl = 1 if r['label'] in ('1', 'phishing', 'malicious') else 0
-                    feats = extractor.extract_features(u, is_email=False)
-                    data.append([feats.get(f, 0) for f in extractor.get_feature_names()])
-                    labels.append(lbl)
-                print(f"   Collected {len(u_legit_sample)} legitimate and {len(u_phish_sample)} phishing URL samples.")
+                for _, r in u_legit_sample.iterrows():
+                    url_samples.append((str(r['url']).strip(), 0))
+                for _, r in u_phish_sample.iterrows():
+                    url_samples.append((str(r['url']).strip(), 1))
+                print(f"   + url_dataset.csv: {len(u_legit_sample)} legit, {len(u_phish_sample)} phish")
         except Exception as e:
-            print(f"   ⚠️ URL extraction error: {e}")
+            print(f"   ⚠️ url_dataset.csv error: {e}")
 
+    # 1b. PhishMind_URL_dict.csv
+    dict_url_file = os.path.join(BASE_DIR, "PhishMind_URL_dict.csv")
+    if os.path.exists(dict_url_file):
+        try:
+            df_dict_url = pd.read_csv(dict_url_file, on_bad_lines='skip')
+            df_dict_url.columns = [str(c).strip().lower() for c in df_dict_url.columns]
+            text_col = 'input_text' if 'input_text' in df_dict_url.columns else 'url'
+            if text_col in df_dict_url.columns and 'label' in df_dict_url.columns:
+                df_dict_url = df_dict_url.dropna(subset=[text_col, 'label'])
+                for _, r in df_dict_url.iterrows():
+                    lbl = 1 if str(r['label']).strip() in ('1', 'phishing') else 0
+                    url_samples.append((str(r[text_col]).strip(), lbl))
+                print(f"   + PhishMind_URL_dict.csv: {len(df_dict_url)} samples added")
+        except Exception as e:
+            print(f"   ⚠️ PhishMind_URL_dict.csv error: {e}")
+
+    # 1c. Popular legitimate websites, social media, and shortened URLs
+    popular_legit_urls = [
+        "https://www.youtube.com", "https://youtube.com", "www.youtube.com", "youtube.com",
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "https://www.youtube.com/feed/subscriptions",
+        "https://www.youtube.com/results?search_query=cybersecurity", "https://youtu.be/dQw4w9WgXcQ",
+        "https://youtu.be/kJQP7kiw5Fk", "https://youtu.be/9bZkp7q19f0", "youtu.be/dQw4w9WgXcQ",
+        "https://www.google.com", "https://google.com", "www.google.com", "google.com",
+        "https://www.google.com/search?q=phishing+detection", "https://mail.google.com/mail/u/0/#inbox",
+        "https://www.facebook.com", "https://facebook.com", "www.facebook.com", "facebook.com",
+        "https://www.facebook.com/login", "https://www.facebook.com/groups/feed", "https://fb.me/help",
+        "https://fb.me/security", "fb.me/about",
+        "https://twitter.com", "https://twitter.com/home", "https://x.com", "https://x.com/explore",
+        "https://t.co/abc12345", "https://t.co/XyZ890", "t.co/news123",
+        "https://instagram.com", "https://www.instagram.com/p/C0xyz",
+        "https://linkedin.com", "https://www.linkedin.com/feed/", "https://reddit.com", "https://reddit.com/r/technology",
+        "https://github.com", "https://github.com/torvalds/linux", "https://gitlab.com", "https://stackoverflow.com",
+        
+        # Legitimate Shortened URLs (social media shares, marketing, announcements)
+        "https://bit.ly/3x8kL", "https://bit.ly/annual-report-2025", "https://bit.ly/phishmind-app",
+        "bit.ly/3x8kL", "bit.ly/cybersecurity-guide", "https://bit.ly/research-paper-2025",
+        "https://bit.ly/tech-news-daily", "https://bit.ly/student-portal-info", "https://bit.ly/conference-schedule",
+        "https://bit.ly/dev-summit-2025", "https://bit.ly/community-invite", "https://bit.ly/project-docs",
+        "https://bit.ly/marketing-brief", "https://bit.ly/product-launch", "https://bit.ly/team-calendar",
+        "https://tinyurl.com/abc123", "https://tinyurl.com/abc1234", "https://tinyurl.com/phishmind-demo",
+        "tinyurl.com/abc123", "https://tinyurl.com/webinar-replay", "https://tinyurl.com/campus-event",
+        "https://tinyurl.com/fall-symposium", "https://tinyurl.com/student-handbook", "https://tinyurl.com/guest-lecture",
+        "https://is.gd/updateinfo", "https://is.gd/campusmap", "https://buff.ly/2kP98x", "https://buff.ly/socialpost",
+        "https://ow.ly/i/5e8y", "https://ow.ly/press-release", "https://cutt.ly/learning-hub",
+        "https://rebrand.ly/cyber-defense", "https://t.me/techcommunity",
+    ]
+
+    shortener_hosts = ["https://bit.ly/", "bit.ly/", "https://tinyurl.com/", "tinyurl.com/", "https://t.co/", "t.co/", "https://is.gd/", "https://buff.ly/", "https://ow.ly/", "https://cutt.ly/", "https://rb.gy/"]
+    benign_slugs = [
+        "3x8kL", "annual-report", "phishmind-app", "cybersecurity-guide", "research-2025",
+        "tech-news", "student-info", "conference-schedule", "dev-summit", "community-invite",
+        "project-docs", "marketing-brief", "product-launch", "team-calendar", "webinar-replay",
+        "campus-event", "fall-symposium", "student-handbook", "guest-lecture", "campusmap",
+        "socialpost", "press-release", "learning-hub", "cyber-defense", "newsletter-jan",
+        "spring-festival", "alumni-meet", "library-hours", "course-syllabus", "sports-recap",
+        "hackathon", "career-fair", "internship-tips", "code-repo", "design-system"
+    ]
+    for host in shortener_hosts:
+        for slug in benign_slugs:
+            popular_legit_urls.append(f"{host}{slug}")
+
+    for u in popular_legit_urls:
+        url_samples.append((u, 0))
+
+    # Add realistic phishing shortened URLs for discrimination
+    phishing_shortened_urls = [
+        "https://bit.ly/paypal-login-update", "https://bit.ly/bdo-verify-now", "https://bit.ly/secure-banking-alert",
+        "https://tinyurl.com/bank-account-locked", "https://tinyurl.com/claim-500-reward", "https://is.gd/reset-password-now",
+        "https://bit.ly/gcash-unblock-wallet", "https://tinyurl.com/bpi-express-login", "https://cutt.ly/urgent-card-suspended",
+        "https://bit.ly/apple-id-suspended", "https://tinyurl.com/facebook-security-check", "https://buff.ly/verify-account-now"
+    ]
+    for u in phishing_shortened_urls:
+        url_samples.append((u, 1))
+
+    # Extract URL features
+    for u, lbl in url_samples:
+        if not u:
+            continue
+        feats = extractor.extract_features(u, is_email=False, is_sms=False)
+        data.append([feats.get(f, 0) for f in extractor.get_feature_names()])
+        labels.append(lbl)
+    print(f"   Total URL feature vectors: {len(url_samples)}")
+
+    # =========================================================================
     # 2. Collect Email Samples
+    # =========================================================================
+    print("👉 Collecting Email training samples...")
+    email_samples = []
+
+    # 2a. email_dataset.csv
     email_file = os.path.join(BASE_DIR, "email_dataset.csv")
     if os.path.exists(email_file):
-        print("👉 Extracting Email dataset samples...")
         try:
             df_email = pd.read_csv(email_file, on_bad_lines='skip')
             df_email.columns = [str(c).strip().lower() for c in df_email.columns]
             label_col = 'final_label' if 'final_label' in df_email.columns else 'label'
             msg_col = 'cleaned_message' if 'cleaned_message' in df_email.columns else 'original_message'
-            
+
             if msg_col in df_email.columns and label_col in df_email.columns:
                 df_email = df_email.dropna(subset=[msg_col, label_col])
                 df_email[label_col] = df_email[label_col].astype(str).str.strip().str.lower()
                 e_phish = df_email[df_email[label_col].isin(['1', 'phishing', 'smishing', 'spam'])]
                 e_legit = df_email[df_email[label_col].isin(['0', 'legitimate', 'ham', 'benign'])]
-                
+
                 target_count = min(len(e_phish), 1000)
                 e_phish_sample = e_phish.sample(n=target_count, random_state=42) if len(e_phish) > target_count else e_phish
-                e_legit_sample = e_legit.sample(n=target_count * 2, random_state=42) if len(e_legit) > target_count * 2 else e_legit
+                e_legit_sample = e_legit.sample(n=target_count, random_state=42) if len(e_legit) > target_count else e_legit
 
-                for _, r in pd.concat([e_legit_sample, e_phish_sample]).iterrows():
-                    text = str(r[msg_col])
-                    lbl = 1 if r[label_col] in ('1', 'phishing', 'smishing', 'spam') else 0
-                    feats = extractor.extract_features(text, is_email=True)
-                    data.append([feats.get(f, 0) for f in extractor.get_feature_names()])
-                    labels.append(lbl)
-                print(f"   Collected {len(e_legit_sample)} legitimate and {len(e_phish_sample)} phishing Email samples.")
+                for _, r in e_legit_sample.iterrows():
+                    email_samples.append((str(r[msg_col]), 0))
+                for _, r in e_phish_sample.iterrows():
+                    email_samples.append((str(r[msg_col]), 1))
+                print(f"   + email_dataset.csv: {len(e_legit_sample)} legit, {len(e_phish_sample)} phish")
         except Exception as e:
-            print(f"   ⚠️ Email extraction error: {e}")
+            print(f"   ⚠️ email_dataset.csv error: {e}")
 
+    # 2b. PhishMind_Email_dict.csv
+    dict_email_file = os.path.join(BASE_DIR, "PhishMind_Email_dict.csv")
+    if os.path.exists(dict_email_file):
+        try:
+            df_dict_email = pd.read_csv(dict_email_file, on_bad_lines='skip')
+            df_dict_email.columns = [str(c).strip().lower() for c in df_dict_email.columns]
+            msg_col = 'input_text' if 'input_text' in df_dict_email.columns else 'body'
+            if msg_col in df_dict_email.columns and 'label' in df_dict_email.columns:
+                df_dict_email = df_dict_email.dropna(subset=[msg_col, 'label'])
+                for _, r in df_dict_email.iterrows():
+                    lbl = 1 if str(r['label']).strip() in ('1', 'phishing') else 0
+                    email_samples.append((str(r[msg_col]), lbl))
+                print(f"   + PhishMind_Email_dict.csv: {len(df_dict_email)} samples added")
+        except Exception as e:
+            print(f"   ⚠️ PhishMind_Email_dict.csv error: {e}")
+
+    # Extract Email features
+    for text, lbl in email_samples:
+        if not text:
+            continue
+        feats = extractor.extract_features(text, is_email=True, is_sms=False)
+        data.append([feats.get(f, 0) for f in extractor.get_feature_names()])
+        labels.append(lbl)
+    print(f"   Total Email feature vectors: {len(email_samples)}")
+
+    # =========================================================================
     # 3. Collect SMS Samples
+    # =========================================================================
+    print("👉 Collecting SMS training samples...")
+    sms_samples = []
+
+    # 3a. sms_dataset.csv
     sms_file = os.path.join(BASE_DIR, "sms_dataset.csv")
     if os.path.exists(sms_file):
-        print("👉 Extracting SMS dataset samples...")
         try:
             df_sms = pd.read_csv(sms_file, on_bad_lines='skip')
             df_sms.columns = [str(c).strip().lower() for c in df_sms.columns]
@@ -98,18 +211,60 @@ def train_master_model():
 
                 target_count = min(len(s_phish), 1000)
                 s_phish_sample = s_phish.sample(n=target_count, random_state=42) if len(s_phish) > target_count else s_phish
-                s_legit_sample = s_legit.sample(n=target_count * 2, random_state=42) if len(s_legit) > target_count * 2 else s_legit
+                s_legit_sample = s_legit.sample(n=target_count, random_state=42) if len(s_legit) > target_count else s_legit
 
-                for _, r in pd.concat([s_legit_sample, s_phish_sample]).iterrows():
-                    text = str(r[msg_col])
-                    lbl = 1 if r[label_col] in ('1', 'phishing', 'smishing', 'spam') else 0
-                    feats = extractor.extract_features(text, is_sms=True)
-                    data.append([feats.get(f, 0) for f in extractor.get_feature_names()])
-                    labels.append(lbl)
-                print(f"   Collected {len(s_legit_sample)} legitimate and {len(s_phish_sample)} phishing SMS samples.")
+                for _, r in s_legit_sample.iterrows():
+                    sms_samples.append((str(r[msg_col]), 0))
+                for _, r in s_phish_sample.iterrows():
+                    sms_samples.append((str(r[msg_col]), 1))
+                print(f"   + sms_dataset.csv: {len(s_legit_sample)} legit, {len(s_phish_sample)} phish")
         except Exception as e:
-            print(f"   ⚠️ SMS extraction error: {e}")
+            print(f"   ⚠️ sms_dataset.csv error: {e}")
 
+    # 3b. PhishMind_SMS_dict.csv
+    dict_sms_file = os.path.join(BASE_DIR, "PhishMind_SMS_dict.csv")
+    if os.path.exists(dict_sms_file):
+        try:
+            df_dict_sms = pd.read_csv(dict_sms_file, on_bad_lines='skip')
+            df_dict_sms.columns = [str(c).strip().lower() for c in df_dict_sms.columns]
+            msg_col = 'input_text' if 'input_text' in df_dict_sms.columns else 'text'
+            if msg_col in df_dict_sms.columns and 'label' in df_dict_sms.columns:
+                df_dict_sms = df_dict_sms.dropna(subset=[msg_col, 'label'])
+                for _, r in df_dict_sms.iterrows():
+                    lbl = 1 if str(r['label']).strip() in ('1', 'phishing', 'smishing') else 0
+                    sms_samples.append((str(r[msg_col]), lbl))
+                print(f"   + PhishMind_SMS_dict.csv: {len(df_dict_sms)} samples added")
+        except Exception as e:
+            print(f"   ⚠️ PhishMind_SMS_dict.csv error: {e}")
+
+    # 3c. tagalog-sms.csv (All Legitimate authentic Filipino notifications and advisories, label = 0)
+    tagalog_file = os.path.join(BASE_DIR, "tagalog-sms.csv")
+    if os.path.exists(tagalog_file):
+        try:
+            df_tagalog = pd.read_csv(tagalog_file, on_bad_lines='skip')
+            df_tagalog.columns = [str(c).strip().lower() for c in df_tagalog.columns]
+            msg_col = 'input_text' if 'input_text' in df_tagalog.columns else ('text' if 'text' in df_tagalog.columns else None)
+            if msg_col and msg_col in df_tagalog.columns:
+                df_tagalog = df_tagalog.dropna(subset=[msg_col])
+                for _, r in df_tagalog.iterrows():
+                    # All Tagalog SMS samples are verified legitimate communications
+                    sms_samples.append((str(r[msg_col]), 0))
+                print(f"   + tagalog-sms.csv: {len(df_tagalog)} legitimate Filipino SMS messages added")
+        except Exception as e:
+            print(f"   ⚠️ tagalog-sms.csv error: {e}")
+
+    # Extract SMS features
+    for text, lbl in sms_samples:
+        if not text:
+            continue
+        feats = extractor.extract_features(text, is_email=False, is_sms=True)
+        data.append([feats.get(f, 0) for f in extractor.get_feature_names()])
+        labels.append(lbl)
+    print(f"   Total SMS feature vectors: {len(sms_samples)}")
+
+    # =========================================================================
+    # 4. Train Master Random Forest Model
+    # =========================================================================
     if not data:
         raise ValueError("No valid training samples could be extracted across datasets.")
 
@@ -123,7 +278,8 @@ def train_master_model():
     model = PhishingMLModel()
     model.feature_names = extractor.get_feature_names()
     metrics = model.train(X, y)
-    print(f"📈 Master Model Accuracy: {metrics['accuracy']:.4f}")
+    print(f"📈 Master Model Metrics:")
+    print(f"   Accuracy: {metrics['accuracy']:.4f}")
 
     out_path = os.path.join(BASE_DIR, "phishing_model.pkl")
     model.save_model(out_path)

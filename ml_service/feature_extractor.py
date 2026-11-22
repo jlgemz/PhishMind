@@ -13,9 +13,55 @@ class FeatureExtractor:
             'account', 'password', 'credential', 'signin', 'authenticate',
             'validate', 'recover', 'reset', 'activate', 'authorize',
             'verification', 'security', 'alert', 'warning', 'suspicious',
-            'paypal', 'amazon', 'google', 'facebook', 'microsoft', 'apple',
-            'suspended', 'restore', 'urgent', 'limited', 'action', 'now', 'billing'
+            'suspended', 'restore', 'urgent', 'limited', 'action', 'now', 'billing',
+            'wallet', 'unlock', 'unauthorized', 're-activate'
         ]
+        self.popular_brand_domains = {
+            'google': {'google', 'youtube', 'gmail', 'gstatic', 'googlevideo', 'blogger', 'withgoogle'},
+            'youtube': {'youtube', 'youtu'},
+            'facebook': {'facebook', 'fb', 'messenger'},
+            'meta': {'meta', 'facebook', 'instagram', 'whatsapp'},
+            'instagram': {'instagram'},
+            'whatsapp': {'whatsapp'},
+            'twitter': {'twitter', 'x', 't'},
+            'tiktok': {'tiktok'},
+            'linkedin': {'linkedin'},
+            'apple': {'apple', 'icloud'},
+            'microsoft': {'microsoft', 'live', 'office', 'outlook', 'windows', 'msn', 'bing'},
+            'amazon': {'amazon', 'aws'},
+            'netflix': {'netflix'},
+            'paypal': {'paypal'},
+            'yahoo': {'yahoo'},
+            'github': {'github'},
+            'reddit': {'reddit'},
+            'telegram': {'telegram'},
+            'spotify': {'spotify'},
+            'gcash': {'gcash'},
+            'maya': {'maya', 'paymaya'},
+            'bdo': {'bdo'},
+            'bpi': {'bpi'},
+            'landbank': {'landbank'},
+            'metrobank': {'metrobank'},
+            'unionbank': {'unionbank'},
+            'securitybank': {'securitybank'},
+            'smart': {'smart'},
+            'globe': {'globe'},
+            'shopee': {'shopee'},
+            'lazada': {'lazada'},
+            'slack': {'slack'},
+            'zoom': {'zoom'},
+            'wikipedia': {'wikipedia'},
+            'openai': {'openai'},
+            'cloudflare': {'cloudflare'},
+            'adobe': {'adobe'},
+            'bitly': {'bit', 'bitly'},
+            'tinyurl': {'tinyurl'}
+        }
+        self.known_shorteners = {
+            'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd',
+            'buff.ly', 'adf.ly', 'bl.ink', 'cutt.ly', 'tiny.cc', 'shorturl.at',
+            'youtu.be', 'fb.me', 'rb.gy', 'qr.ae', 'rebrand.ly', 't.me'
+        }
         self.suspicious_tlds = [
             '.tk', '.ml', '.ga', '.cf', '.top', '.xyz', '.work',
             '.date', '.download', '.bid', '.win', '.club', '.online',
@@ -59,7 +105,8 @@ class FeatureExtractor:
             'domain_entropy', 'has_query_string', 'has_fragment',
             'domain_age_days', 'has_brand_spoofing', 'digit_ratio',
             'special_char_ratio', 'has_http', 'has_www', 'has_hex_path',
-            'has_suspicious_ext', # 👈 ADDED NEW FEATURE
+            'has_suspicious_ext',
+            'is_shortened_url', 'is_popular_domain',
             
             # EMAIL SPECIFIC
             'email_body_length', 'email_subject_length', 'email_has_urls',
@@ -88,7 +135,7 @@ class FeatureExtractor:
             if re.match(r'^[a-zA-Z]+:///$', cleaned) or re.match(r'^[a-zA-Z]+://$', cleaned):
                 return False, "Malformed URL: missing domain or host."
 
-            target = cleaned if re.match(r'^[a-zA-Z]+://', cleaned) else 'http://' + cleaned
+            target = cleaned if re.match(r'^[a-zA-Z]+://', cleaned) else 'https://' + cleaned
             try:
                 parsed = urllib.parse.urlparse(target)
                 domain_info = tldextract.extract(target)
@@ -124,11 +171,15 @@ class FeatureExtractor:
                 features = self.extract_email_features(content)
             else:
                 features = self.extract_url_features(content)
-                for f in self.get_feature_names()[29:]:
-                    features[f] = 0
         except Exception as e:
             print(f"Error extracting features: {e}")
-            features = {f: 0 for f in self.get_feature_names()}
+            features = {}
+            
+        # Ensure all registered features exist with safe defaults
+        for f in self.get_feature_names():
+            if f not in features:
+                features[f] = 0
+                
         return features
 
     def extract_email_features(self, content):
@@ -172,12 +223,12 @@ class FeatureExtractor:
         if urls:
             target_domain = urls[0]
         elif emails:
-            target_domain = "http://" + emails[0]
+            target_domain = "https://" + emails[0]
 
         if target_domain:
             features.update(self.extract_url_features(target_domain))
         else:
-            for f in self.get_feature_names()[:29]:
+            for f in self.get_feature_names()[:31]:
                 features[f] = 0
                 
         return features
@@ -186,14 +237,14 @@ class FeatureExtractor:
         features = {}
         text_lower = text.lower()
 
-        urls = re.findall(r'(https?://[^\s]+|www\.[^\s]+)', text)
+        urls = re.findall(r'(https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[^\s]+)', text)
         if urls:
             url = urls[0]
             if not url.startswith("http"):
-                url = "http://" + url
+                url = "https://" + url
             features.update(self.extract_url_features(url))
         else:
-            for f in self.get_feature_names()[:29]:
+            for f in self.get_feature_names()[:31]:
                 features[f] = 0
 
         features['email_body_length'] = len(text)
@@ -209,60 +260,97 @@ class FeatureExtractor:
         sms_hits = sum(1 for kw in self.sms_phishing_keywords if kw in text_lower)
         features['digit_ratio'] = min(1.0, sms_hits / 5.0)
 
-        if re.search(r'\b\d{8,}\b', text):
+        # Real IP addresses only (not arbitrary 8-digit OTP reference numbers)
+        if re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', text):
             features['has_ip'] = 1
+        else:
+            features['has_ip'] = 0
 
         letters = [c for c in text if c.isalpha()]
         if letters:
             caps_ratio = sum(1 for c in letters if c.isupper()) / len(letters)
-            if caps_ratio > 0.3:
+            if caps_ratio > 0.35:
                 features['has_suspicious_keyword'] = 1
 
         return features
 
     def extract_url_features(self, url):
-        parsed = urllib.parse.urlparse(url)
-        domain_info = tldextract.extract(url)
+        raw_url = str(url).strip()
+        has_explicit_scheme = bool(re.match(r'^[a-zA-Z]+://', raw_url))
+        normalized_url = raw_url if has_explicit_scheme else 'https://' + raw_url
+
+        parsed = urllib.parse.urlparse(normalized_url)
+        domain_info = tldextract.extract(normalized_url)
         features = {}
 
-        features['url_length'] = len(url)
+        features['url_length'] = len(normalized_url)
         features['domain_length'] = len(domain_info.domain)
-        features['path_length'] = len(parsed.path)
+        features['path_length'] = len(parsed.path.lstrip('/'))
         features['query_length'] = len(parsed.query) if parsed.query else 0
-        features['num_dots'] = url.count('.')
-        features['num_hyphens'] = url.count('-')
-        features['num_underscores'] = url.count('_')
-        features['num_slashes'] = url.count('/')
-        features['num_question_marks'] = url.count('?')
-        features['num_equal_signs'] = url.count('=')
-        features['num_at_signs'] = url.count('@')
-        features['num_percent_signs'] = url.count('%')
-        features['num_digits'] = sum(c.isdigit() for c in url)
-        features['has_https'] = 1 if url.startswith('https://') else 0
-        features['has_ip'] = 1 if re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', url) else 0
+        features['num_dots'] = normalized_url.count('.')
+        features['num_hyphens'] = normalized_url.count('-')
+        features['num_underscores'] = normalized_url.count('_')
+        features['num_slashes'] = normalized_url.count('/')
+        features['num_question_marks'] = normalized_url.count('?')
+        features['num_equal_signs'] = normalized_url.count('=')
+        features['num_at_signs'] = normalized_url.count('@')
+        features['num_percent_signs'] = normalized_url.count('%')
+        features['num_digits'] = sum(c.isdigit() for c in normalized_url)
+
+        features['has_https'] = 1 if (raw_url.startswith('https://') or not has_explicit_scheme) else 0
+        features['has_http'] = 1 if raw_url.startswith('http://') else 0
+        features['has_ip'] = 1 if (re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', domain_info.domain)
+                                   or re.search(r'^[0-9.]+$', domain_info.domain)) else 0
         
-        url_lower = url.lower()
-        features['has_suspicious_keyword'] = 1 if any(kw in url_lower for kw in self.suspicious_keywords) else 0
+        url_lower = normalized_url.lower()
+        curr_domain = (domain_info.domain or '').lower()
+        curr_suffix = (domain_info.suffix or '').lower()
+        registered_domain = f"{curr_domain}.{curr_suffix}" if curr_suffix else curr_domain
+
+        # URL Shortener detection
+        is_shortener = (
+            registered_domain in self.known_shorteners
+            or (curr_domain in ('bit', 'tinyurl', 't', 'ow', 'is', 'buff', 'adf', 'bl', 'cutt', 'tiny', 'shorturl', 'youtu', 'fb', 'rb', 'rebrand')
+                and curr_suffix in ('ly', 'com', 'co', 'gl', 'gd', 'ink', 'cc', 'at', 'be', 'me', 'gy'))
+        )
+        features['is_shortened_url'] = 1 if is_shortener else 0
+
+        # Popular / legitimate platform detection
+        is_popular = (
+            (curr_domain in self.popular_brand_domains or any(curr_domain in domains for domains in self.popular_brand_domains.values()))
+            and curr_suffix in ('com', 'org', 'net', 'edu', 'gov', 'io', 'be', 'me', 'co', 'ly', 'app', 'dev', 'ai', 'tv', 'link', 'ph', 'com.ph', 'edu.ph', 'gov.ph', 'org.ph')
+        )
+        features['is_popular_domain'] = 1 if is_popular else 0
+
+        # Brand spoofing: brand name used on an untrusted or lookalike domain
+        features['has_brand_spoofing'] = self.check_brand_spoofing(normalized_url, domain_info)
+
+        # Suspicious keywords
+        if is_popular and parsed.path.lower() in ('/login', '/signin', '/account', '/watch', '/home', '/explore', '/watch/'):
+            features['has_suspicious_keyword'] = 0
+        else:
+            features['has_suspicious_keyword'] = 1 if any(kw in url_lower for kw in self.suspicious_keywords) else 0
+
         features['has_suspicious_tld'] = 1 if any(url_lower.endswith(tld) for tld in self.suspicious_tlds) else 0
         
-        features['subdomain_count'] = len(domain_info.subdomain.split('.')) if domain_info.subdomain else 0
+        # Subdomains (exclude www)
+        subdomains = [s for s in domain_info.subdomain.split('.') if s and s != 'www']
+        features['subdomain_count'] = len(subdomains)
         features['domain_entropy'] = self.calculate_entropy(domain_info.domain)
         features['has_query_string'] = 1 if parsed.query else 0
         features['has_fragment'] = 1 if parsed.fragment else 0
         features['domain_age_days'] = 0
-        features['has_brand_spoofing'] = 1 if self.check_brand_spoofing(url) else 0
-        features['digit_ratio'] = features['num_digits'] / max(1, len(url))
+        features['digit_ratio'] = features['num_digits'] / max(1, len(normalized_url))
         features['special_char_ratio'] = (
             features['num_dots'] + features['num_hyphens']
             + features['num_underscores'] + features['num_slashes']
-        ) / max(1, len(url))
-        features['has_http'] = 1 if 'http://' in url else 0
-        features['has_www'] = 1 if 'www.' in url else 0
+        ) / max(1, len(normalized_url))
+        features['has_www'] = 1 if 'www.' in url_lower else 0
         
         hex_pattern = re.compile(r'[a-f0-9]{16,}', re.IGNORECASE)
         features['has_hex_path'] = 1 if hex_pattern.search(parsed.path) else 0
 
-        # 👈 NEW: Catch dangerous executable extensions
+        # Suspicious file extensions
         ext = os.path.splitext(parsed.path)[1].lower()
         suspicious_exts = ['.php', '.exe', '.zip', '.cgi', '.bin', '.x86_64', '.tar.gz', '.dll', '.msi']
         features['has_suspicious_ext'] = 1 if ext in suspicious_exts else 0
@@ -280,10 +368,21 @@ class FeatureExtractor:
             entropy -= p * math.log2(p)
         return entropy
 
-    def check_brand_spoofing(self, url):
-        popular_brands = [
-            'google', 'facebook', 'amazon', 'microsoft', 'apple',
-            'paypal', 'bank', 'secure', 'account', 'login',
-        ]
+    def check_brand_spoofing(self, url, domain_info=None):
+        if domain_info is None:
+            domain_info = tldextract.extract(url)
+
+        curr_domain = (domain_info.domain or '').lower()
         url_lower = url.lower()
-        return any(brand in url_lower for brand in popular_brands)
+
+        for brand, legitimate_domains in self.popular_brand_domains.items():
+            # If current registered domain is an authentic domain for this brand, it is NOT spoofing!
+            if curr_domain in legitimate_domains:
+                continue
+            if len(brand) < 3:
+                continue
+            # Look for brand as a distinct token or keyword in domain, subdomain, or path
+            # e.g., paypal.somewhere.com, login-paypal.com, or test.com/paypal/login
+            if re.search(r'(?:^|[^a-z0-9])' + re.escape(brand) + r'(?:[^a-z0-9]|$)', url_lower):
+                return 1
+        return 0

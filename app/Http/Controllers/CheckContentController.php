@@ -241,18 +241,28 @@ class CheckContentController extends Controller
 
     private function detectType(string $content): string
     {
-        if (preg_match('#^https?://#i', $content)) {
+        $trimmed = trim($content);
+
+        // 1. Check for URL patterns (with or without protocol, including www, IP addresses, and domain.tld)
+        if (preg_match('#^https?://#i', $trimmed)
+            || preg_match('#^www\.#i', $trimmed)
+            || preg_match('#^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+(/[^\s]*)?$#i', $trimmed)
+            || (filter_var('https://' . $trimmed, FILTER_VALIDATE_URL) && !str_contains($trimmed, ' ') && str_contains($trimmed, '.'))) {
             return 'url';
         }
 
-        $lower = strtolower($content);
+        // 2. Check for Email patterns
+        $lower = strtolower($trimmed);
         if (str_contains($lower, 'dear ')
             || str_contains($lower, 'kind regards')
             || str_contains($lower, 'sincerely')
-            || str_contains($content, '|')) {
+            || str_contains($lower, 'subject:')
+            || str_contains($trimmed, '|')
+            || preg_match('/from:\s*[^\n]+@[^\n]+/i', $trimmed)) {
             return 'email';
         }
 
+        // 3. Default to SMS
         return 'sms';
     }
 
