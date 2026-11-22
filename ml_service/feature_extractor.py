@@ -184,10 +184,22 @@ class FeatureExtractor:
 
     def extract_email_features(self, content):
         features = {}
-        features['email_body_length'] = len(content)
-        features['email_subject_length'] = (
-            len(content.split('|')[0]) if '|' in content else len(content) // 2
-        )
+        content_str = str(content).strip()
+        features['email_body_length'] = len(content_str)
+
+        # Subject extraction: Check for explicit Subject header or pipe delimiter
+        subj_match = re.search(r'^(?:subject|re|fwd):\s*([^\n\r]+)', content_str, re.IGNORECASE | re.MULTILINE)
+        if subj_match:
+            features['email_subject_length'] = len(subj_match.group(1).strip())
+        elif '|' in content_str:
+            features['email_subject_length'] = len(content_str.split('|')[0].strip())
+        else:
+            first_line = content_str.split('\n')[0].strip()
+            # If the first line is a greeting / salutation, there is no subject line in the body
+            if re.match(r'^(?:dear|to|hi|hello|greetings|good\s+(?:morning|afternoon|day|evening))\b', first_line, re.IGNORECASE):
+                features['email_subject_length'] = 0
+            else:
+                features['email_subject_length'] = min(len(first_line), 80)
 
         urls = re.findall(r'(https?://[^\s]+)', content)
         emails = re.findall(r'[\w\.-]+@([\w\.-]+\.\w+)', content)

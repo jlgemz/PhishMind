@@ -179,6 +179,25 @@ def train_master_model():
         except Exception as e:
             print(f"   ⚠️ PhishMind_Email_dict.csv error: {e}")
 
+    # 2c. Authentic institutional, academic notices and university announcements (Legitimate, label = 0)
+    academic_legit_emails = [
+        "Dear Students,\n\nPlease be informed that the midterm examinations will begin on November 25, 2026.\n\nStudents are advised to review their respective subject schedules and prepare the necessary examination materials.\n\nFor questions or concerns, kindly contact your department office during regular working hours.\n\nThank you.\n\nOffice of Academic Affairs",
+        "Dear Students,\n\nPlease be advised that final examinations for the current semester will take place from December 15 to December 20, 2026. Ensure all clearance requirements are submitted to the registrar before the examination week.\n\nBest regards,\nOffice of the University Registrar",
+        "Dear Campus Community,\n\nIn view of the approaching typhoon, classes and university administrative operations are suspended tomorrow. Please stay indoors, remain safe, and monitor official campus channels for updates.\n\nOffice of Student Affairs",
+        "Dear Students,\n\nAcademic advising for the upcoming semester is now open. Please schedule an appointment with your designated faculty advisor during consulting hours to finalize your course enrollment.\n\nCollege of Computer Studies",
+        "Dear Students and Faculty,\n\nThe University Main Library will operate on extended hours during the midterm examination period to accommodate student study groups. Quiet study rooms and computer terminals are available.\n\nUniversity Library Services",
+        "Dear Graduating Class,\n\nPlease ensure that your graduation clearance forms are completed and submitted to your respective department heads by the end of this month. For questions, visit the student records office.\n\nRegistrar's Office",
+        "Dear Students,\n\nThis is a friendly reminder that the deadline for the second installment of tuition fees is on the 30th of this month. Payments may be settled at the university cashier or designated partner banks.\n\nFinance Department",
+        "Subject: Midterm Examination Guidelines\n\nDear Students,\n\nPlease find the examination room assignments posted on your department bulletin boards. Make sure to bring your student ID and required testing materials.\n\nAcademic Evaluation Committee",
+        "Subject: Faculty Consultation Hours Update\n\nDear Students,\n\nStarting this week, faculty consultation hours for Computer Science courses will be held every Tuesday and Thursday from 2:00 PM to 5:00 PM in Room 304.\n\nDepartment of Information Technology",
+        "Dear Student Body,\n\nThe annual university career fair will be held next Friday at the campus auditorium. Local and international partner employers will be conducting on-site interviews.\n\nCareer Placement Office",
+        "Dear Students,\n\nPlease check your student portal for your preliminary grades. If you have any inquiries regarding your grade computation, kindly coordinate directly with your subject instructor.\n\nDean's Office",
+        "Subject: Campus Health and Wellness Week\n\nDear All,\n\nWe invite all students and staff to participate in the upcoming Health and Wellness seminar series starting Monday at the gymnasium.\n\nUniversity Health Services"
+    ]
+    # Multiply to ensure solid representation across decision tree splits
+    for email_text in academic_legit_emails * 10:
+        email_samples.append((email_text, 0))
+
     # Extract Email features
     for text, lbl in email_samples:
         if not text:

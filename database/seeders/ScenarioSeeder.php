@@ -42,6 +42,16 @@ class ScenarioSeeder extends Seeder
         ]);
 
         Scenario::create([
+            'type' => 'Email Phishing',
+            'content' => "Dear Students,\n\nPlease be informed that the midterm examinations will begin on November 25, 2026.\n\nStudents are advised to review their respective subject schedules and prepare the necessary examination materials.\n\nFor questions or concerns, kindly contact your department office during regular working hours.\n\nThank you.\n\nOffice of Academic Affairs",
+            'is_phishing' => false,
+            'indicator' => 'authority',
+            'is_diagnostic' => false,
+            'status' => 'approved',
+            'explanation' => 'Authentic university midterm examination announcement from the Office of Academic Affairs.',
+        ]);
+
+        Scenario::create([
             'type' => 'SMS Phishing',
             'content' => "Never share your OTP 385535 or enter it on suspicious forms/sites from SMS links. Only use it in the GoTyme Bank app. If you didn't request it, call #468888.",
             'is_phishing' => false,

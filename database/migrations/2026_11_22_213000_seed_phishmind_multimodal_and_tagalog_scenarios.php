@@ -69,6 +69,26 @@ return new class extends Migration
                 'explanation' => 'Shortened URL hiding a spoofed BDO online banking login page.',
             ],
 
+            // Authentic Academic & Institutional Emails
+            [
+                'type' => 'Email Phishing',
+                'content' => "Dear Students,\n\nPlease be informed that the midterm examinations will begin on November 25, 2026.\n\nStudents are advised to review their respective subject schedules and prepare the necessary examination materials.\n\nFor questions or concerns, kindly contact your department office during regular working hours.\n\nThank you.\n\nOffice of Academic Affairs",
+                'is_phishing' => false,
+                'indicator' => 'authority',
+                'is_diagnostic' => false,
+                'status' => 'approved',
+                'explanation' => 'Authentic academic notice from the Office of Academic Affairs providing examination schedules without suspicious links or credential requests.',
+            ],
+            [
+                'type' => 'Email Phishing',
+                'content' => "Dear Students,\n\nPlease be advised that final examinations for the current semester will take place from December 15 to December 20, 2026. Ensure all clearance requirements are submitted to the registrar before the examination week.\n\nBest regards,\nOffice of the University Registrar",
+                'is_phishing' => false,
+                'indicator' => 'authority',
+                'is_diagnostic' => false,
+                'status' => 'approved',
+                'explanation' => 'Legitimate official registrar advisory regarding semester final examination dates and clearance.',
+            ],
+
             // Authentic Filipino SMS Communications (Tagalog & English)
             [
                 'type' => 'SMS Phishing',
