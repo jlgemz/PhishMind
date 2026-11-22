@@ -35,11 +35,20 @@ def train_url_model():
     df['url'] = df['url'].astype(str).str.strip()
     df['label'] = df['label'].astype(str).str.strip().str.lower()
 
+    # Separate and balance classes to prevent extreme 200:1 prior imbalance
+    phish_df = df[df['label'].isin(['1', 'phishing', 'malicious'])]
+    legit_df = df[df['label'].isin(['0', 'legitimate', 'benign'])]
+
+    if len(legit_df) > 0 and len(phish_df) > len(legit_df) * 3:
+        phish_sample = phish_df.sample(n=len(legit_df) * 3, random_state=42)
+        df = pd.concat([legit_df, phish_sample]).sample(frac=1.0, random_state=42)
+        print(f"⚖️ Balanced URL dataset: {len(legit_df)} legitimate, {len(phish_sample)} phishing")
+
     extractor = FeatureExtractor()
     data, labels = [], []
 
     for i, row in df.iterrows():
-        url = html.unescape(row['url'])
+        url = html.unescape(row['url']).strip()
         label_str = row['label']
 
         if 'phishing' in label_str or label_str == '1' or label_str == 'malicious':
@@ -48,6 +57,10 @@ def train_url_model():
             label = 0
         else:
             continue
+
+        # Normalize bare domain names (e.g. google.com -> https://google.com)
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
 
         try:
             feats = extractor.extract_features(url, is_email=False)

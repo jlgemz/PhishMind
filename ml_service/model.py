@@ -46,11 +46,31 @@ class PhishingMLModel:
             key=lambda kv: kv[1],
             reverse=True,
         )
+        negative = sorted(
+            [(k, v) for k, v in feature_shap.items() if v < 0],
+            key=lambda kv: kv[1],
+        )
+
+        influential = sorted(
+            [(k, v) for k, v in feature_shap.items()],
+            key=lambda kv: abs(kv[1]),
+            reverse=True,
+        )
+
+        prob_phish = float(probabilities[1]) if len(probabilities) > 1 else float(probabilities[0])
+        prob_legit = float(probabilities[0]) if len(probabilities) > 1 else 1.0 - prob_phish
 
         return {
             "prediction": prediction,
             "confidence": float(max(probabilities)),
+            "probabilities": {
+                "legitimate": prob_legit,
+                "phishing": prob_phish,
+            },
             "top_risk_indicators": positive[:5],
+            "top_safety_indicators": negative[:5],
+            "top_influential_indicators": influential[:5],
+            "shap_values": feature_shap,
         }
 
     def save_model(self, filepath="phishing_model.pkl"):

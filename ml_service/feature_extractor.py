@@ -69,6 +69,53 @@ class FeatureExtractor:
             'has_threatening_language',
         ]
 
+    def validate_input(self, content: str, modality: str = 'url') -> tuple:
+        """
+        Validates whether an input is processable for the given modality.
+        Returns (is_valid: bool, error_message: str).
+        """
+        if not content or not str(content).strip():
+            return False, "Input content is empty or contains only whitespace."
+
+        cleaned = str(content).strip()
+        mod_lower = modality.lower()
+
+        if 'url' in mod_lower:
+            if len(cleaned) < 3:
+                return False, "URL is too short to constitute a valid web address."
+            
+            # Reject impossible protocols or malformed schemes
+            if re.match(r'^[a-zA-Z]+:///$', cleaned) or re.match(r'^[a-zA-Z]+://$', cleaned):
+                return False, "Malformed URL: missing domain or host."
+
+            target = cleaned if re.match(r'^[a-zA-Z]+://', cleaned) else 'http://' + cleaned
+            try:
+                parsed = urllib.parse.urlparse(target)
+                domain_info = tldextract.extract(target)
+            except Exception as e:
+                return False, f"Failed to parse URL: {e}"
+
+            has_ip = bool(re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', target))
+            has_domain = bool(domain_info.domain and (domain_info.suffix or domain_info.domain in ('localhost', 'local')))
+            has_netloc = bool(parsed.netloc and ('.' in parsed.netloc or has_ip or 'localhost' in parsed.netloc))
+
+            if not (has_ip or has_domain or has_netloc):
+                return False, "Malformed or invalid URL: unable to identify a valid domain name, hostname, or IP address."
+
+            return True, ""
+
+        elif 'email' in mod_lower:
+            if len(cleaned) < 8:
+                return False, "Email content is too short to analyze for phishing signals (minimum 8 characters)."
+            return True, ""
+
+        elif 'sms' in mod_lower:
+            if len(cleaned) < 4:
+                return False, "SMS content is too short to evaluate (minimum 4 characters)."
+            return True, ""
+
+        return True, ""
+
     def extract_features(self, content, is_email=False, is_sms=False):
         try:
             if is_sms:

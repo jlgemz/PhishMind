@@ -48,7 +48,7 @@ Generate the explanatory feedback for the student."""
                 "think": False,
                 "options": {"temperature": 0.4, "num_predict": 400},
             },
-            timeout=20,
+            timeout=1.5,
         )
         resp.raise_for_status()
         data = resp.json()
