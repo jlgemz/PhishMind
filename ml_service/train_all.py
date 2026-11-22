@@ -198,6 +198,17 @@ def train_master_model():
     for email_text in academic_legit_emails * 10:
         email_samples.append((email_text, 0))
 
+    # 2d. Representative Phishing Emails (urgent credential theft, fake IT alerts, label = 1)
+    phishing_credential_emails = [
+        "Urgent: Your account will be closed within 24 hours. Verify your password and login credentials now: https://fake-bank-auth.com",
+        "Subject: Urgent Security Notice - Account Suspension\n\nDear Customer,\n\nYour account has been flagged for unauthorized activity and will be deactivated immediately. To prevent account closure, verify your password and identity here: https://security-update-portal.com/verify\n\nIT Support",
+        "Subject: Password Expiry Notification\n\nYour Microsoft 365 password expires today. Keep your current password by verifying your credentials at: https://outlook-auth-verify.xyz/login\n\nSystem Administrator",
+        "Subject: Immediate Action Required: Payroll Discrepancy\n\nWe detected an issue processing your monthly salary direct deposit. Please update your banking credentials and card details immediately: https://payroll-update-support.online/auth",
+        "Subject: Account Warning: Unusual Sign-In Detected\n\nSomeone attempted to access your online banking from an unknown device. Verify your credentials and confirm your account now: https://bank-verify-alert.net/security",
+    ]
+    for email_text in phishing_credential_emails * 15:
+        email_samples.append((email_text, 1))
+
     # Extract Email features
     for text, lbl in email_samples:
         if not text:
@@ -271,6 +282,18 @@ def train_master_model():
                 print(f"   + tagalog-sms.csv: {len(df_tagalog)} legitimate Filipino SMS messages added")
         except Exception as e:
             print(f"   ⚠️ tagalog-sms.csv error: {e}")
+
+    # 3d. Representative Phishing SMS / Smishing lures (label = 1)
+    phishing_sms_samples = [
+        "ALERT: Your bank account has been suspended. Verify your identity now: https://secure-bank.xyz/verify",
+        "BDO Alert: Your online banking account has been temporarily blocked due to irregular login attempts. Unlock now: https://bdo-security-online.xyz/reactivate",
+        "GCash Notice: Your wallet has been placed on hold due to SIM card unverified status. Verify your details within 12 hours: https://gcash-verify-user.top/wallet",
+        "Maya Advisory: Your account requires mandatory security update. Failure to update will result in account closure. Click here: https://maya-auth-update.club",
+        "DHL Express: Your delivery parcel #938210 is detained at customs clearance. Settle fee or update address: https://dhl-express-track.info/fee",
+        "Security Alert: We detected an unrecognized device login to your mobile banking. If this was not you, cancel transaction: https://security-cancel-auth.net",
+    ]
+    for sms_text in phishing_sms_samples * 15:
+        sms_samples.append((sms_text, 1))
 
     # Extract SMS features
     for text, lbl in sms_samples:

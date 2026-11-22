@@ -88,8 +88,10 @@ class FeatureExtractor:
             "delivery", "package", "parcel", "customs", "tax",
         ]
         self.threat_words = [
-            "terminate", "suspend", "legal action", "close your account",
-            "blocked", "locked", "deactivated", "unauthorized", "penalty"
+            "terminate", "suspend", "suspended", "suspension", "legal action",
+            "close your account", "account will be closed", "account will be suspended",
+            "account will be terminated", "account suspended", "blocked", "locked",
+            "deactivated", "unauthorized", "penalty", "shut down"
         ]
         self.attachment_hints = [
             "[file]", "attachment", ".pdf", ".zip", ".exe", ".docx", ".xls", ".html"
@@ -285,13 +287,27 @@ class FeatureExtractor:
             1 for w in self.urgency_words if w in text_lower
         )
 
+        # Check for credential and identity harvesting requests (not legitimate OTP delivery)
+        credential_phrases = [
+            'enter your password', 'verify your password', 'credit card',
+            'social security', 'ssn', 'cvv', 'enter your pin', 'enter your otp',
+            'send your pin', 'send your otp', 'login credentials',
+            'account number', 'verify your identity', 'verify your account',
+            'update your details', 'confirm your identity', 'security code', 'banking password'
+        ]
+        features['has_credential_request'] = 1 if any(p in text_lower for p in credential_phrases) else 0
+
+        # Check for threatening / coercion language
+        features['has_threatening_language'] = 1 if any(t in text_lower for t in self.threat_words) else 0
+
         sms_hits = sum(1 for kw in self.sms_phishing_keywords if kw in text_lower)
-        features['digit_ratio'] = min(1.0, sms_hits / 5.0)
+        if not urls:
+            features['digit_ratio'] = min(1.0, sms_hits / 5.0)
 
         # Real IP addresses only (not arbitrary 8-digit OTP reference numbers)
         if re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', text):
             features['has_ip'] = 1
-        else:
+        elif not urls:
             features['has_ip'] = 0
 
         letters = [c for c in text if c.isalpha()]
@@ -359,7 +375,13 @@ class FeatureExtractor:
         else:
             features['has_suspicious_keyword'] = 1 if any(kw in url_lower for kw in self.suspicious_keywords) else 0
 
-        features['has_suspicious_tld'] = 1 if any(url_lower.endswith(tld) for tld in self.suspicious_tlds) else 0
+        suffix = (domain_info.suffix or '').lower()
+        suffix_with_dot = f".{suffix}" if suffix else ""
+        netloc_clean = (parsed.netloc or '').lower().split(':')[0]
+        features['has_suspicious_tld'] = 1 if (
+            suffix_with_dot in self.suspicious_tlds
+            or any(netloc_clean.endswith(tld) for tld in self.suspicious_tlds)
+        ) else 0
         
         # Subdomains (exclude www)
         subdomains = [s for s in domain_info.subdomain.split('.') if s and s != 'www']

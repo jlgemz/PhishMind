@@ -154,7 +154,7 @@
                     Plain-language explanation
                 </h3>
                 <p class="text-xs text-slate-500 mb-4">Qwen 3.5 2B · grounded in verified evidence</p>
-                <p class="text-sm text-slate-600 leading-relaxed mb-4">{{ $record->llm_explanation }}</p>
+                <p class="text-sm text-slate-600 leading-relaxed mb-4 whitespace-pre-line">{{ $record->llm_explanation }}</p>
                 <p class="text-xs text-slate-400 border-t border-slate-100 pt-4">The language model explains the supplied evidence. It does not decide the verdict.</p>
             </div>
 

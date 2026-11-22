@@ -15,7 +15,131 @@ if BASE_DIR not in sys.path:
 
 from model import PhishingMLModel
 from feature_extractor import FeatureExtractor
-from llm_explainer import generate_explanation
+from llm_explainer import generate_explanation, _fallback_explanation
+
+# Feature definitions for modality-specific indicator filtering
+URL_FEATURES = {
+    'url_length', 'domain_length', 'path_length', 'query_length',
+    'num_dots', 'num_hyphens', 'num_underscores', 'num_slashes',
+    'num_question_marks', 'num_equal_signs', 'num_at_signs',
+    'num_percent_signs', 'num_digits', 'has_https', 'has_http', 'has_ip',
+    'has_suspicious_keyword', 'has_suspicious_tld', 'subdomain_count',
+    'domain_entropy', 'has_query_string', 'has_fragment',
+    'domain_age_days', 'has_brand_spoofing', 'digit_ratio',
+    'special_char_ratio', 'has_www', 'has_hex_path', 'has_suspicious_ext',
+    'is_shortened_url', 'is_popular_domain',
+}
+
+EMAIL_FEATURES = {
+    'email_body_length', 'email_subject_length', 'email_has_urls',
+    'email_url_count', 'email_has_attachments', 'email_urgency_score',
+    'sender_is_free_email', 'has_credential_request',
+    'sender_domain_mismatch', 'has_threatening_language',
+}
+
+SMS_FEATURES = {
+    'email_body_length', 'email_urgency_score', 'has_credential_request',
+    'has_threatening_language', 'digit_ratio', 'has_suspicious_keyword',
+    'has_ip', 'email_has_urls', 'email_url_count',
+}
+
+EMBEDDED_LINK_FEATURES = {
+    'has_suspicious_tld', 'has_brand_spoofing', 'is_shortened_url',
+    'is_popular_domain', 'has_suspicious_keyword', 'has_https',
+    'has_http', 'has_ip', 'subdomain_count', 'domain_entropy',
+    'domain_length', 'path_length', 'num_dots', 'num_hyphens', 'url_length'
+}
+
+def get_allowed_features_for_modality(modality: str, features_dict: dict) -> set:
+    mod = modality.lower()
+    if 'url' in mod or 'web' in mod:
+        return set(URL_FEATURES)
+    elif 'sms' in mod or 'message' in mod or 'social' in mod:
+        allowed = set(SMS_FEATURES)
+        if features_dict.get('email_has_urls', 0) == 1:
+            allowed |= EMBEDDED_LINK_FEATURES
+        return allowed
+    elif 'email' in mod:
+        allowed = set(EMAIL_FEATURES)
+        if features_dict.get('email_has_urls', 0) == 1:
+            allowed |= EMBEDDED_LINK_FEATURES
+        return allowed
+    return set(URL_FEATURES) | set(EMAIL_FEATURES) | set(SMS_FEATURES)
+
+def get_modality_display_name(feature_key: str, modality: str) -> str:
+    mod = modality.lower()
+    if 'sms' in mod or 'message' in mod or 'social' in mod:
+        sms_labels = {
+            'email_body_length': 'SMS Message Character Length',
+            'email_urgency_score': 'Urgent Call-to-Action Language',
+            'has_credential_request': 'Requests Sensitive Credentials / PIN',
+            'has_threatening_language': 'Account Suspension / Threatening Language',
+            'digit_ratio': 'Digit & Keyword Density',
+            'has_suspicious_keyword': 'Security Alert & Promo Keywords',
+            'has_ip': 'Direct IP Address Host in Link',
+            'email_has_urls': 'Contains Embedded Web Link',
+            'email_url_count': 'Count of Embedded Links',
+            'has_suspicious_tld': 'High-Risk Link Domain Extension (TLD)',
+            'is_shortened_url': 'Shortened URL Redirection Link',
+            'has_brand_spoofing': 'Brand Impersonation in Link',
+            'is_popular_domain': 'Verified Official Brand Domain',
+            'has_https': 'Secure HTTPS Protocol on Link',
+            'subdomain_count': 'Subdomain Count on Link',
+            'domain_entropy': 'Character Randomness in Link Domain',
+        }
+        if feature_key in sms_labels:
+            return sms_labels[feature_key]
+
+    elif 'email' in mod:
+        email_labels = {
+            'email_body_length': 'Email Body Character Length',
+            'email_subject_length': 'Email Subject Line Length',
+            'email_has_urls': 'Embedded Hyperlinks Present',
+            'email_url_count': 'Count of Embedded Hyperlinks',
+            'email_has_attachments': 'File Attachment Mention or References',
+            'email_urgency_score': 'Urgency & Pressure Language Score',
+            'sender_is_free_email': 'Sent from Free Webmail Service',
+            'has_credential_request': 'Requests Passwords, PINs, or Credentials',
+            'sender_domain_mismatch': 'Free Sender Claiming Institutional Brand',
+            'has_threatening_language': 'Threatening or Coercive Language',
+            'has_suspicious_tld': 'High-Risk Domain Extension (TLD) in Link',
+            'has_brand_spoofing': 'Brand Lookalike / Impersonation in Link',
+            'is_shortened_url': 'Shortened URL Redirection Service',
+            'is_popular_domain': 'Verified Official Institutional Domain',
+            'has_https': 'Secure HTTPS Protocol on Embedded Link',
+        }
+        if feature_key in email_labels:
+            return email_labels[feature_key]
+
+    url_labels = {
+        'url_length': 'URL Character Length',
+        'domain_length': 'Domain Character Length',
+        'path_length': 'URL Path Length',
+        'query_length': 'Query String Length',
+        'num_dots': 'Dot Separator Count in URL',
+        'num_hyphens': 'Hyphen Count in Hostname/Path',
+        'num_underscores': 'Underscore Count in URL',
+        'num_slashes': 'Path Slash Separators',
+        'num_digits': 'Digit Character Count in URL',
+        'has_https': 'HTTPS Protocol Encryption',
+        'has_http': 'Unencrypted HTTP Connection',
+        'has_ip': 'Raw IP Address Hostname',
+        'has_suspicious_keyword': 'Suspicious Lure Keyword in URL',
+        'has_suspicious_tld': 'Suspicious High-Risk Domain TLD',
+        'subdomain_count': 'Excessive Subdomain Count',
+        'domain_entropy': 'Domain Randomness (Entropy)',
+        'has_brand_spoofing': 'Brand Impersonation / Lookalike Domain',
+        'digit_ratio': 'Digit Character Ratio in URL',
+        'special_char_ratio': 'Special Character Density',
+        'has_www': 'Standard WWW Host Prefix',
+        'has_suspicious_ext': 'Executable or Script File Extension',
+        'is_shortened_url': 'Shortened URL Redirection Service',
+        'is_popular_domain': 'Verified Official Brand Platform',
+    }
+    if feature_key in url_labels:
+        return url_labels[feature_key]
+
+    return feature_key.replace('_', ' ').title()
 
 app = FastAPI()
 model = PhishingMLModel()
@@ -197,31 +321,36 @@ async def predict_content(req: PredictRequest):
     # Risk score (0-100 scale representing threat likelihood)
     risk_score = int(round(prob_phishing * 100))
 
-    # Human-readable SHAP indicators
+    # Human-readable SHAP indicators filtered strictly by modality
+    allowed_features = get_allowed_features_for_modality(modality, features_dict)
+    raw_risk = [item for item in ml_result.get("top_risk_indicators", []) if item[0] in allowed_features]
+    raw_safety = [item for item in ml_result.get("top_safety_indicators", []) if item[0] in allowed_features]
+    raw_influential = [item for item in ml_result.get("top_influential_indicators", []) if item[0] in allowed_features]
+
     shap_indicators = []
-    if prediction == 1:
-        for feat, val in ml_result.get("top_risk_indicators", []):
-            val_str = f"+{val:.2f}" if val > 0 else f"{val:.2f}"
-            feat_name = feat.replace("_", " ").title()
-            shap_indicators.append({"feature": feat_name, "value": val_str, "type": "risk"})
-    else:
-        for feat, val in ml_result.get("top_safety_indicators", []):
-            val_str = f"{val:.2f}"
-            feat_name = feat.replace("_", " ").title()
-            shap_indicators.append({"feature": feat_name, "value": val_str, "type": "safety"})
+    source_list = raw_risk if prediction == 1 else raw_safety
+    if not source_list:
+        source_list = raw_influential
+
+    for feat, val in source_list:
+        if len(shap_indicators) >= 5:
+            break
+        val_str = f"+{val:.2f}" if val > 0 else f"{val:.2f}"
+        feat_name = get_modality_display_name(feat, modality)
+        shap_indicators.append({"feature": feat_name, "value": val_str, "type": "risk" if val > 0 else "safety"})
 
     # Backfill with influential features if list is short
     if len(shap_indicators) < 3:
-        for feat, val in ml_result.get("top_influential_indicators", []):
-            val_str = f"+{val:.2f}" if val > 0 else f"{val:.2f}"
-            feat_name = feat.replace("_", " ").title()
-            if not any(i["feature"] == feat_name for i in shap_indicators):
-                shap_indicators.append({"feature": feat_name, "value": val_str, "type": "risk" if val > 0 else "safety"})
+        for feat, val in raw_influential:
             if len(shap_indicators) >= 5:
                 break
+            feat_name = get_modality_display_name(feat, modality)
+            if not any(i["feature"] == feat_name for i in shap_indicators):
+                val_str = f"+{val:.2f}" if val > 0 else f"{val:.2f}"
+                shap_indicators.append({"feature": feat_name, "value": val_str, "type": "risk" if val > 0 else "safety"})
 
     if not shap_indicators:
-        shap_indicators = [{"feature": "Baseline Feature Distribution", "value": "0.00", "type": "neutral"}]
+        shap_indicators = [{"feature": f"Standard {modality.upper()} Baseline Profile", "value": "0.00", "type": "neutral"}]
 
     # Warnings: Never claim an input is guaranteed safe simply because no known pattern was found
     if prediction == 1:
@@ -245,6 +374,7 @@ async def predict_content(req: PredictRequest):
         )
 
     feedback_payload = {
+        "modality": modality.upper(),
         "ml_prediction": prediction,
         "ml_confidence": round(confidence * 100, 1),
         "student_decision": prediction,
@@ -256,13 +386,8 @@ async def predict_content(req: PredictRequest):
 
     try:
         explanation = generate_explanation(feedback_payload)
-    except Exception:
-        verdict_str = "Phishing" if prediction == 1 else "Legitimate"
-        explanation = (
-            f"The Random Forest model evaluated this {modality.upper()} content using 39 structural and lexical features, "
-            f"classifying it as {verdict_str} with {confidence*100:.1f}% confidence. "
-            f"Key feature contributions: " + ", ".join(f"{i['feature']} ({i['value']})" for i in shap_indicators[:3]) + "."
-        )
+    except Exception as e:
+        explanation = _fallback_explanation(feedback_payload, str(e))
 
     return {
         "status": "success",
@@ -292,8 +417,10 @@ class AdaptiveRequest(BaseModel):
 
 @app.post("/adaptive/evaluate")
 async def adaptive_evaluate(req: AdaptiveRequest):
-    is_sms = req.scenario_type in ("SMS Phishing", "Messaging & Social Media")
-    is_email = req.scenario_type in ("Email Phishing",) and not is_sms
+    sc_type_lower = req.scenario_type.lower()
+    is_sms = "sms" in sc_type_lower or "message" in sc_type_lower or "social" in sc_type_lower
+    is_email = "email" in sc_type_lower and not is_sms
+    modality_str = "SMS" if is_sms else ("Email" if is_email else "URL")
 
     features_dict = extractor.extract_features(
         req.url, is_email=is_email, is_sms=is_sms
@@ -304,60 +431,73 @@ async def adaptive_evaluate(req: AdaptiveRequest):
     ml_prediction = int(ml_result["prediction"])
     ml_confidence = float(ml_result["confidence"])
 
-    print(f"\n--- ML DEBUG ---")
-    print(f"URL: {req.url[:60]}...")
+    print(f"\n--- ML DEBUG ({modality_str}) ---")
+    print(f"Content: {req.url[:60]}...")
     print(f"Ground Truth: {'Phishing' if req.is_phishing else 'Legitimate'}")
     print(f"ML Prediction: {'Phishing' if ml_prediction == 1 else 'Legitimate'} ({ml_confidence*100:.1f}%)")
-    print(f"Top SHAP: {ml_result.get('top_risk_indicators', [])}")
     print(f"----------------\n")
 
     ml_confidence = max(0.05, min(0.98, ml_confidence))
     ground_truth_prediction = 1 if req.is_phishing else 0
     is_correct = (ground_truth_prediction == req.student_decision)
 
+    # Filter SHAP indicators strictly by what relates to the modality
+    allowed_features = get_allowed_features_for_modality(modality_str, features_dict)
+    raw_risk = [item for item in ml_result.get("top_risk_indicators", []) if item[0] in allowed_features]
+    raw_safety = [item for item in ml_result.get("top_safety_indicators", []) if item[0] in allowed_features]
+    raw_influential = [item for item in ml_result.get("top_influential_indicators", []) if item[0] in allowed_features]
+
     shap_ui, shap_llm = [], []
-    for feat, val in ml_result.get("top_risk_indicators", []):
+    candidate_list = raw_risk if ml_prediction == 1 else raw_safety
+    if not candidate_list:
+        candidate_list = raw_influential
+
+    for feat, val in candidate_list:
         if len(shap_ui) >= 5:
             break
         val_str = f"+{val:.2f}" if val > 0 else f"{val:.2f}"
-        feat_name = feat.replace("_", " ").title()
-        shap_ui.append({"feature": feat_name, "value": val_str, "type": "risk"})
+        feat_name = get_modality_display_name(feat, modality_str)
+        shap_ui.append({"feature": feat_name, "value": val_str, "type": "risk" if val > 0 else "safety"})
         shap_llm.append({"plain_name": feat_name, "contribution": val_str})
 
-    if not shap_ui:
-        for feat, val in ml_result.get("top_safety_indicators", []):
+    # Backfill with remaining allowed influential features if list is short
+    if len(shap_ui) < 3:
+        for feat, val in raw_influential:
             if len(shap_ui) >= 5:
                 break
-            val_str = f"{val:.2f}"
-            feat_name = feat.replace("_", " ").title()
-            shap_ui.append({"feature": feat_name, "value": val_str, "type": "safety"})
+            feat_name = get_modality_display_name(feat, modality_str)
+            if not any(i["feature"] == feat_name for i in shap_ui):
+                val_str = f"+{val:.2f}" if val > 0 else f"{val:.2f}"
+                shap_ui.append({"feature": feat_name, "value": val_str, "type": "risk" if val > 0 else "safety"})
+                shap_llm.append({"plain_name": feat_name, "contribution": val_str})
 
     if not shap_ui:
-        shap_ui = [{"feature": "No strong risk indicators", "value": "0.00", "type": "neutral"}]
-        shap_llm = [{"plain_name": "No strong risk indicators", "contribution": "0.00"}]
+        shap_ui = [{"feature": f"Standard {modality_str} Baseline Profile", "value": "0.00", "type": "neutral"}]
+        shap_llm = [{"plain_name": f"Standard {modality_str} Baseline Profile", "contribution": "0.00"}]
 
     misconceptions = []
     practice_suggestions = []
 
     if not is_correct:
         misconceptions.append({
-            "name": "Fell for a deceptive pattern",
-            "description": "The content used visual or structural tricks that bypassed your initial check."
+            "name": f"Deceptive {modality_str} Pattern",
+            "description": f"The {modality_str.lower()} content contained cues that bypassed your verification."
         })
         practice_suggestions.extend([
-            "Review the domain spelling carefully.",
-            "Check if the sender email matches the official domain."
+            f"Carefully inspect {modality_str} sender authenticity and domain spelling.",
+            "Verify unexpected or urgent requests through official contact directories."
         ])
     elif ml_prediction != ground_truth_prediction:
         misconceptions.append({
-            "name": "AI Misclassification",
-            "description": "You spotted a risk that the Random Forest model missed. Always trust your evidence-based judgment over the AI."
+            "name": "Model Misclassification",
+            "description": "You caught a deceptive signal that the automated model did not prioritize. Trust your evidence-based verification over AI."
         })
-        practice_suggestions.append("Keep up the good work! You outperformed the AI on this one.")
+        practice_suggestions.append("Outstanding work! Your human inspection outperformed the AI model.")
     else:
-        practice_suggestions.append("Keep up the good work!")
+        practice_suggestions.append("Excellent decision! Your judgment follows cybersecurity best practices.")
 
     feedback_payload = {
+        "modality": modality_str,
         "ml_prediction": ground_truth_prediction,
         "ml_confidence": round(ml_confidence * 100, 1),
         "student_decision": req.student_decision,
@@ -369,8 +509,8 @@ async def adaptive_evaluate(req: AdaptiveRequest):
 
     try:
         ai_explanation = generate_explanation(feedback_payload)
-    except Exception:
-        ai_explanation = "The language model could not generate an explanation."
+    except Exception as e:
+        ai_explanation = _fallback_explanation(feedback_payload, str(e))
 
     return {
         "prediction": ml_prediction,
