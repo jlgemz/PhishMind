@@ -130,7 +130,19 @@ class FeatureExtractor:
         if 'url' in mod_lower:
             if len(cleaned) < 3:
                 return False, "URL is too short to constitute a valid web address."
-            
+
+            # Reject multiline inputs (e.g. emails or SMS messages pasted into the URL modality)
+            if '\n' in cleaned or '\r' in cleaned:
+                return False, "Invalid URL: content contains line breaks. It appears you pasted an email or message into the 'URL' modality. Please select the 'Email' or 'SMS' modality above."
+
+            # Reject natural language sentences with multiple spaces
+            if cleaned.count(' ') > 2 and not re.match(r'^[a-zA-Z]+://[^\s]+$', cleaned):
+                return False, "Invalid URL: content contains sentence text with spaces. Please enter a valid web address (e.g., https://example.com) or switch to the 'Email' modality."
+
+            # Reject email greetings / headers
+            if re.match(r'^(?:dear|to|hi|hello|subject:|from:|greetings)\b', cleaned, re.IGNORECASE):
+                return False, "Invalid URL: content begins with an email greeting or header. Please select the 'Email' modality to analyze emails."
+
             # Reject impossible protocols or malformed schemes
             if re.match(r'^[a-zA-Z]+:///$', cleaned) or re.match(r'^[a-zA-Z]+://$', cleaned):
                 return False, "Malformed URL: missing domain or host."
@@ -142,11 +154,15 @@ class FeatureExtractor:
             except Exception as e:
                 return False, f"Failed to parse URL: {e}"
 
+            host = parsed.netloc or ''
+            if any(ch in host for ch in (' ', '\n', '\r', '\t', ',', ';', '!', '?', '"', "'", '(', ')')):
+                return False, "Invalid URL: host contains illegal characters or spaces. If you meant to analyze an email or message, please select the corresponding modality."
+
             has_ip = bool(re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', target))
-            has_domain = bool(domain_info.domain and (domain_info.suffix or domain_info.domain in ('localhost', 'local')))
+            has_domain = bool(domain_info.domain and domain_info.suffix and re.match(r'^[a-zA-Z0-9.-]+$', domain_info.domain))
             has_netloc = bool(parsed.netloc and ('.' in parsed.netloc or has_ip or 'localhost' in parsed.netloc))
 
-            if not (has_ip or has_domain or has_netloc):
+            if not (has_ip or (has_domain and has_netloc) or 'localhost' in parsed.netloc):
                 return False, "Malformed or invalid URL: unable to identify a valid domain name, hostname, or IP address."
 
             return True, ""

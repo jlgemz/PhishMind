@@ -155,33 +155,55 @@ class CheckContentController extends Controller
 
     private function validateInputProcessability(string $content, string $type): ?string
     {
-        if (strlen($content) < 3) {
+        $trimmed = trim($content);
+
+        if (strlen($trimmed) < 3) {
             return "The submitted content is too short to be processed (minimum 3 characters required).";
         }
 
         if ($type === 'url') {
-            // Check for obviously malformed URL patterns
-            if (preg_match('#^[a-zA-Z]+:///$#', $content) || preg_match('#^[a-zA-Z]+://$#', $content)) {
+            // 1. A URL cannot contain newline characters (identifies emails/messages pasted into URL mode)
+            if (str_contains($trimmed, "\n") || str_contains($trimmed, "\r")) {
+                return "Invalid URL: submitted content contains multiple lines. It appears you pasted an email or text message while the 'URL' modality was selected. Please choose the 'Email' or 'SMS' modality above and try again.";
+            }
+
+            // 2. Reject email greetings or headers in URL modality
+            if (preg_match('/^(?:dear|to|hi|hello|subject:|from:|greetings)\b/i', $trimmed)) {
+                return "Invalid URL: content begins with an email greeting or header. It appears you entered an email into the 'URL' modality. Please select the 'Email' modality and try again.";
+            }
+
+            // 3. Reject if content looks like natural language sentences with multiple spaces
+            if (substr_count($trimmed, ' ') > 3 && !preg_match('#^https?://[^\s]+$#', $trimmed)) {
+                return "Invalid URL: submitted content contains sentence text with spaces. Please enter a valid web address (e.g., https://example.com) or switch to the 'Email' modality.";
+            }
+
+            // 4. Check for obviously malformed URL patterns
+            if (preg_match('#^[a-zA-Z]+:///$#', $trimmed) || preg_match('#^[a-zA-Z]+://$#', $trimmed)) {
                 return "Malformed URL: missing domain name or host address.";
             }
 
-            $target = preg_match('#^[a-zA-Z]+://#', $content) ? $content : 'http://' . $content;
+            $target = preg_match('#^[a-zA-Z]+://#', $trimmed) ? $trimmed : 'https://' . $trimmed;
             $parsed = parse_url($target);
             $host   = $parsed['host'] ?? '';
 
+            // Host authority cannot contain whitespace or sentence punctuation
+            if (empty($host) || preg_match('/[\s,;:!?"\'\(\)\[\]\{\}]/', $host)) {
+                return "Invalid URL format: unable to identify a valid domain name or hostname. If you meant to analyze an email or text message, please select the corresponding modality.";
+            }
+
             $hasIp       = filter_var($host, FILTER_VALIDATE_IP) !== false;
-            $hasDomain   = str_contains($host, '.') && strlen($host) >= 4;
+            $hasDomain   = str_contains($host, '.') && strlen($host) >= 4 && preg_match('/^[a-zA-Z0-9.-]+$/', $host);
             $isLocalhost = in_array(strtolower($host), ['localhost', '127.0.0.1']);
 
             if (!$hasIp && !$hasDomain && !$isLocalhost) {
                 return "Malformed URL: unable to detect a valid domain name, hostname, or IP address.";
             }
         } elseif ($type === 'email') {
-            if (strlen($content) < 8) {
+            if (strlen($trimmed) < 8) {
                 return "Email content is too short for phishing feature extraction (minimum 8 characters).";
             }
         } elseif ($type === 'sms') {
-            if (strlen($content) < 4) {
+            if (strlen($trimmed) < 4) {
                 return "SMS message is too short to evaluate (minimum 4 characters).";
             }
         }
