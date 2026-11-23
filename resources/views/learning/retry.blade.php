@@ -35,6 +35,22 @@
             <div class="bg-[#f0f4f8] rounded-xl p-6">
                 <p class="text-sm font-bold text-slate-700 mb-4">In the next example, ask:</p>
                 <ul class="space-y-3 text-sm text-slate-600">
+                    @php
+                        $customQuestion = null;
+                        if (is_array($record->targeted_practice)) {
+                            if (!empty($record->targeted_practice['focus_question'])) {
+                                $customQuestion = $record->targeted_practice['focus_question'];
+                            } elseif (!empty($record->targeted_practice[0]) && is_string($record->targeted_practice[0])) {
+                                $customQuestion = $record->targeted_practice[0];
+                            }
+                        }
+                    @endphp
+                    @if($customQuestion)
+                    <li class="flex items-start gap-3 text-slate-800 font-medium">
+                        <svg class="w-4 h-4 text-brand-teal shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        <span>{{ $customQuestion }}</span>
+                    </li>
+                    @endif
                     <li class="flex items-center gap-3"><svg class="w-4 h-4 text-brand-teal shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> What independently verifies who owns this service?</li>
                     <li class="flex items-center gap-3"><svg class="w-4 h-4 text-brand-teal shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Is the task expected and consistent with the official workflow?</li>
                     <li class="flex items-center gap-3"><svg class="w-4 h-4 text-brand-teal shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Am I treating one familiar clue as proof of legitimacy?</li>
@@ -53,13 +69,25 @@
                     <div class="w-8 h-8 rounded-full border border-slate-600 text-slate-500 bg-brand-dark flex items-center justify-center font-bold text-sm z-10 relative">3</div>
                 </div>
                 <h4 class="text-xl font-bold mb-3">Related example ready</h4>
-                <p class="text-sm text-slate-300 mb-6 leading-relaxed">Next: compare a legitimate university library address with the suspicious identity cues you just reviewed.</p>
+                @php
+                    $retryGoal = null;
+                    if (is_array($record->targeted_practice)) {
+                        if (!empty($record->targeted_practice['goal'])) {
+                            $retryGoal = $record->targeted_practice['goal'];
+                        } elseif (!empty($record->targeted_practice[1]) && is_string($record->targeted_practice[1])) {
+                            $retryGoal = $record->targeted_practice[1];
+                        }
+                    }
+                @endphp
+                <p class="text-sm text-slate-300 mb-6 leading-relaxed">
+                    {{ $retryGoal ?? 'Next: evaluate another scenario in this modality to reinforce your detection skills and avoid deceptive cues.' }}
+                </p>
                 <p class="text-xs text-slate-400 flex items-center gap-2 mb-8">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                    Your first response is saved to the Learning Profile.
+                    Your previous response is saved to your Learning Profile.
                 </p>
             </div>
-            <a href="{{ route('practice.select') }}" class="bg-brand-teal hover:bg-teal-700 text-white text-center w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2">
+            <a href="{{ $record->scenario ? route('learning.next', $record->scenario->id) : route('practice.select') }}" class="bg-brand-teal hover:bg-teal-700 text-white text-center w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2">
                 Try Again &rarr;
             </a>
         </div>

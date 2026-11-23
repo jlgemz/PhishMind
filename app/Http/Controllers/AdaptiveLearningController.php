@@ -94,9 +94,16 @@ class AdaptiveLearningController extends Controller
             ->inRandomOrder()
             ->first();
 
+        // If no other scenario exists, fallback to any approved scenario of this type so user stays in the same modality
+        if (!$next) {
+            $next = Scenario::where('type', $scenario->type)
+                ->where('status', 'approved')
+                ->first();
+        }
+
         if (!$next) {
             return redirect()->route('practice.select')
-                ->with('info', 'No more scenarios available for this type.');
+                ->with('info', 'No scenarios available for this modality.');
         }
 
         return redirect()->route('learning.start', $next->id);
@@ -184,6 +191,7 @@ class AdaptiveLearningController extends Controller
     public function retry(LearningRecord $record)
     {
         if ($record->user_id !== auth()->id()) abort(403);
+        $record->load('scenario');
         return view('learning.retry', compact('record'));
     }
 

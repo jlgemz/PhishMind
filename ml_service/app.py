@@ -15,7 +15,7 @@ if BASE_DIR not in sys.path:
 
 from model import PhishingMLModel
 from feature_extractor import FeatureExtractor
-from llm_explainer import generate_explanation, _fallback_explanation
+from llm_explainer import generate_explanation, generate_adaptive_feedback, _fallback_explanation
 
 # Feature definitions for modality-specific indicator filtering
 URL_FEATURES = {
@@ -321,27 +321,28 @@ async def predict_content(req: PredictRequest):
     # Risk score (0-100 scale representing threat likelihood)
     risk_score = int(round(prob_phishing * 100))
 
-    # Human-readable SHAP indicators filtered strictly by modality
+    # Human-readable SHAP indicators filtered strictly by modality across all feature contributions
     allowed_features = get_allowed_features_for_modality(modality, features_dict)
-    raw_risk = [item for item in ml_result.get("top_risk_indicators", []) if item[0] in allowed_features]
-    raw_safety = [item for item in ml_result.get("top_safety_indicators", []) if item[0] in allowed_features]
-    raw_influential = [item for item in ml_result.get("top_influential_indicators", []) if item[0] in allowed_features]
+    feature_shap = ml_result.get("shap_values", {})
+    modality_shap = {k: v for k, v in feature_shap.items() if k in allowed_features}
+
+    pos_items = sorted([(k, v) for k, v in modality_shap.items() if v > 0], key=lambda kv: kv[1], reverse=True)
+    neg_items = sorted([(k, v) for k, v in modality_shap.items() if v < 0], key=lambda kv: kv[1])
+    inf_items = sorted([(k, v) for k, v in modality_shap.items()], key=lambda kv: abs(kv[1]), reverse=True)
 
     shap_indicators = []
-    source_list = raw_risk if prediction == 1 else raw_safety
+    source_list = pos_items if prediction == 1 else neg_items
     if not source_list:
-        source_list = raw_influential
+        source_list = inf_items
 
-    for feat, val in source_list:
-        if len(shap_indicators) >= 5:
-            break
+    for feat, val in source_list[:5]:
         val_str = f"+{val:.2f}" if val > 0 else f"{val:.2f}"
         feat_name = get_modality_display_name(feat, modality)
         shap_indicators.append({"feature": feat_name, "value": val_str, "type": "risk" if val > 0 else "safety"})
 
     # Backfill with influential features if list is short
     if len(shap_indicators) < 3:
-        for feat, val in raw_influential:
+        for feat, val in inf_items:
             if len(shap_indicators) >= 5:
                 break
             feat_name = get_modality_display_name(feat, modality)
@@ -441,20 +442,21 @@ async def adaptive_evaluate(req: AdaptiveRequest):
     ground_truth_prediction = 1 if req.is_phishing else 0
     is_correct = (ground_truth_prediction == req.student_decision)
 
-    # Filter SHAP indicators strictly by what relates to the modality
+    # Filter SHAP indicators strictly by what relates to the modality across all feature contributions
     allowed_features = get_allowed_features_for_modality(modality_str, features_dict)
-    raw_risk = [item for item in ml_result.get("top_risk_indicators", []) if item[0] in allowed_features]
-    raw_safety = [item for item in ml_result.get("top_safety_indicators", []) if item[0] in allowed_features]
-    raw_influential = [item for item in ml_result.get("top_influential_indicators", []) if item[0] in allowed_features]
+    feature_shap = ml_result.get("shap_values", {})
+    modality_shap = {k: v for k, v in feature_shap.items() if k in allowed_features}
+
+    pos_items = sorted([(k, v) for k, v in modality_shap.items() if v > 0], key=lambda kv: kv[1], reverse=True)
+    neg_items = sorted([(k, v) for k, v in modality_shap.items() if v < 0], key=lambda kv: kv[1])
+    inf_items = sorted([(k, v) for k, v in modality_shap.items()], key=lambda kv: abs(kv[1]), reverse=True)
 
     shap_ui, shap_llm = [], []
-    candidate_list = raw_risk if ml_prediction == 1 else raw_safety
+    candidate_list = pos_items if ml_prediction == 1 else neg_items
     if not candidate_list:
-        candidate_list = raw_influential
+        candidate_list = inf_items
 
-    for feat, val in candidate_list:
-        if len(shap_ui) >= 5:
-            break
+    for feat, val in candidate_list[:5]:
         val_str = f"+{val:.2f}" if val > 0 else f"{val:.2f}"
         feat_name = get_modality_display_name(feat, modality_str)
         shap_ui.append({"feature": feat_name, "value": val_str, "type": "risk" if val > 0 else "safety"})
@@ -462,7 +464,7 @@ async def adaptive_evaluate(req: AdaptiveRequest):
 
     # Backfill with remaining allowed influential features if list is short
     if len(shap_ui) < 3:
-        for feat, val in raw_influential:
+        for feat, val in inf_items:
             if len(shap_ui) >= 5:
                 break
             feat_name = get_modality_display_name(feat, modality_str)
@@ -475,42 +477,24 @@ async def adaptive_evaluate(req: AdaptiveRequest):
         shap_ui = [{"feature": f"Standard {modality_str} Baseline Profile", "value": "0.00", "type": "neutral"}]
         shap_llm = [{"plain_name": f"Standard {modality_str} Baseline Profile", "contribution": "0.00"}]
 
-    misconceptions = []
-    practice_suggestions = []
-
-    if not is_correct:
-        misconceptions.append({
-            "name": f"Deceptive {modality_str} Pattern",
-            "description": f"The {modality_str.lower()} content contained cues that bypassed your verification."
-        })
-        practice_suggestions.extend([
-            f"Carefully inspect {modality_str} sender authenticity and domain spelling.",
-            "Verify unexpected or urgent requests through official contact directories."
-        ])
-    elif ml_prediction != ground_truth_prediction:
-        misconceptions.append({
-            "name": "Model Misclassification",
-            "description": "You caught a deceptive signal that the automated model did not prioritize. Trust your evidence-based verification over AI."
-        })
-        practice_suggestions.append("Outstanding work! Your human inspection outperformed the AI model.")
-    else:
-        practice_suggestions.append("Excellent decision! Your judgment follows cybersecurity best practices.")
-
     feedback_payload = {
+        "content": req.url,
         "modality": modality_str,
-        "ml_prediction": ground_truth_prediction,
+        "scenario_type": req.scenario_type,
+        "ground_truth": ground_truth_prediction,
+        "ml_prediction": ml_prediction,
         "ml_confidence": round(ml_confidence * 100, 1),
         "student_decision": req.student_decision,
+        "student_reasoning": req.student_reasoning,
         "student_agrees_with_model": is_correct,
         "verified_risk_indicators": shap_llm,
-        "misconceptions": misconceptions,
-        "targeted_practice": practice_suggestions,
     }
 
-    try:
-        ai_explanation = generate_explanation(feedback_payload)
-    except Exception as e:
-        ai_explanation = _fallback_explanation(feedback_payload, str(e))
+    adaptive_fb = generate_adaptive_feedback(feedback_payload)
+    ai_explanation = adaptive_fb.get("explanation", "")
+    misconceptions = adaptive_fb.get("misconceptions", [])
+    practice_suggestions = adaptive_fb.get("targeted_practice", [])
+    recommendation = adaptive_fb.get("recommendation", "")
 
     return {
         "prediction": ml_prediction,
@@ -522,6 +506,7 @@ async def adaptive_evaluate(req: AdaptiveRequest):
         "misconceptions": misconceptions,
         "targeted_practice": practice_suggestions,
         "explanation": ai_explanation,
+        "recommendation": recommendation,
     }
 
 

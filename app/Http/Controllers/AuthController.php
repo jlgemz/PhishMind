@@ -61,7 +61,10 @@ class AuthController extends Controller
         $validated = $request->validate([
             'name' => 'required', 
             'email' => 'required|email|unique:users', 
-            'password' => 'required|min:8|confirmed'
+            'password' => 'required|min:8|confirmed',
+            'terms' => 'accepted',
+        ], [
+            'terms.accepted' => 'You must agree to the Terms & Conditions to create an account.'
         ]);
 
         $user = User::create([

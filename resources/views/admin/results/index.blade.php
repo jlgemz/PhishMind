@@ -11,7 +11,7 @@
                 <th class="px-6 py-3 font-semibold">Scenario</th>
                 <th class="px-6 py-3 font-semibold">Model Verdict</th>
                 <th class="px-6 py-3 font-semibold">Student Choice</th>
-                <th class="px-6 py-3 font-semibold">Mastery</th>
+                <th class="px-6 py-3 font-semibold">Correct attempts</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">

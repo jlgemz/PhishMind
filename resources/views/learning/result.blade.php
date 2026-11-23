@@ -91,7 +91,7 @@
                     @if($record->mastery_achieved)
                         <div class="flex items-center gap-2 text-emerald-600 font-bold text-lg">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            Mastery Achieved (Correct)
+                            Correct Answer
                         </div>
                     @else
                         <div class="flex items-center gap-2 text-rose-600 font-bold text-lg">
@@ -153,9 +153,9 @@
                     <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
                     Plain-language explanation
                 </h3>
-                <p class="text-xs text-slate-500 mb-4">Qwen 3.5 2B · grounded in verified evidence</p>
+                <p class="text-xs text-slate-500 mb-4">Grounded in verified security indicators</p>
                 <p class="text-sm text-slate-600 leading-relaxed mb-4 whitespace-pre-line">{{ $record->llm_explanation }}</p>
-                <p class="text-xs text-slate-400 border-t border-slate-100 pt-4">The language model explains the supplied evidence. It does not decide the verdict.</p>
+                <p class="text-xs text-slate-400 border-t border-slate-100 pt-4">The plain-language model explains the supplied evidence. It does not decide the verdict.</p>
             </div>
 
             <!-- Misconception Alert -->
@@ -165,7 +165,7 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                     POSSIBLE MISCONCEPTION DETECTED
                 </h4>
-                <p class="text-base font-bold text-slate-800 mb-2">{{ $record->misconceptions[0]['name'] ?? 'Unknown' }}</p>
+                <p class="text-base font-bold text-slate-800 mb-2">{{ $record->misconceptions[0]['name'] ?? 'Deceptive Indicator Pattern' }}</p>
                 <p class="text-sm text-slate-700 leading-relaxed">{{ $record->misconceptions[0]['description'] ?? '' }}</p>
             </div>
             @endif
@@ -177,8 +177,18 @@
                     CYBERSECURITY RECOMMENDATION
                 </h4>
                 <p class="text-base font-bold text-slate-800 mb-1">What to do next</p>
-                @if($record->scenario && $record->scenario->is_phishing)
-                    <p class="text-sm text-slate-700">Do not use the link or reply. Report this message to your university IT security team and delete it.</p>
+                @php
+                    $recText = null;
+                    if (!empty($record->targeted_practice['recommendation'])) {
+                        $recText = $record->targeted_practice['recommendation'];
+                    } elseif (!empty($record->misconceptions[0]['recommendation'])) {
+                        $recText = $record->misconceptions[0]['recommendation'];
+                    }
+                @endphp
+                @if($recText)
+                    <p class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{{ $recText }}</p>
+                @elseif($record->scenario && $record->scenario->is_phishing)
+                    <p class="text-sm text-slate-700">Do not use the link or reply. Report this message to your security team and delete it.</p>
                 @else
                     <p class="text-sm text-slate-700">This appears to be a legitimate message. You can proceed, but always double-check the sender if anything feels unusual.</p>
                 @endif

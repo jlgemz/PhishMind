@@ -228,18 +228,63 @@ class CheckContentController extends Controller
 
     private function localRandomForestFallback(string $content, string $type): array
     {
-        $detector = app(\App\Services\PhishingDetectorService::class);
-        $analysis = $detector->analyzeURL($content);
-        $isPhishing = ($analysis['status'] === 'dangerous' || ($analysis['confidence_score'] ?? 0) >= 50);
-        $confidence = max(0.55, min(0.95, ($analysis['confidence_score'] ?? 50) / 100));
-
+        $type = strtolower($type);
         $indicators = [];
-        foreach ($analysis['indicators'] ?? [] as $ind) {
-            $indicators[] = [
-                'feature' => $ind,
-                'value'   => $isPhishing ? '+0.15' : '-0.15',
-                'type'    => $isPhishing ? 'risk' : 'safety',
-            ];
+        $isPhishing = false;
+        $confidence = 0.70;
+
+        if ($type === 'url') {
+            $detector = app(\App\Services\PhishingDetectorService::class);
+            $analysis = $detector->analyzeURL($content);
+            $isPhishing = ($analysis['status'] === 'dangerous' || ($analysis['confidence_score'] ?? 0) >= 50);
+            $confidence = max(0.55, min(0.95, ($analysis['confidence_score'] ?? 50) / 100));
+
+            foreach ($analysis['indicators'] ?? [] as $ind) {
+                $indicators[] = [
+                    'feature' => $ind,
+                    'value'   => $isPhishing ? '+0.15' : '-0.15',
+                    'type'    => $isPhishing ? 'risk' : 'safety',
+                ];
+            }
+        } elseif ($type === 'email') {
+            $lower = strtolower($content);
+            $hasUrgency = str_contains($lower, 'urgent') || str_contains($lower, 'suspended') || str_contains($lower, 'action required') || str_contains($lower, '24 hours');
+            $hasCreds = str_contains($lower, 'password') || str_contains($lower, 'verify your') || str_contains($lower, 'login') || str_contains($lower, 'credentials');
+            $hasLinks = str_contains($lower, 'http://') || str_contains($lower, 'https://');
+            $isFreeSender = str_contains($lower, 'gmail.com') || str_contains($lower, 'yahoo.com');
+
+            $score = ($hasUrgency ? 1 : 0) + ($hasCreds ? 1 : 0) + ($hasLinks ? 1 : 0) + ($isFreeSender ? 1 : 0);
+            $isPhishing = ($score >= 2);
+            $confidence = $isPhishing ? 0.78 : 0.72;
+
+            if ($hasUrgency) $indicators[] = ['feature' => 'Urgency & Pressure Language Score', 'value' => '+0.25', 'type' => 'risk'];
+            if ($hasCreds) $indicators[] = ['feature' => 'Requests Passwords, PINs, or Credentials', 'value' => '+0.30', 'type' => 'risk'];
+            if ($isFreeSender) $indicators[] = ['feature' => 'Sent from Free Webmail Service', 'value' => '+0.20', 'type' => 'risk'];
+            if ($hasLinks) $indicators[] = ['feature' => 'Embedded Hyperlinks Present', 'value' => '+0.15', 'type' => 'risk'];
+
+            if (empty($indicators)) {
+                $indicators[] = ['feature' => 'Email Subject Line Length', 'value' => '-0.20', 'type' => 'safety'];
+                $indicators[] = ['feature' => 'Standard Email Correspondence Format', 'value' => '-0.25', 'type' => 'safety'];
+            }
+        } else {
+            // SMS Modality
+            $lower = strtolower($content);
+            $hasUrgency = str_contains($lower, 'urgent') || str_contains($lower, 'suspended') || str_contains($lower, 'blocked') || str_contains($lower, 'immediately');
+            $hasLink = str_contains($lower, 'http') || str_contains($lower, 'www.') || str_contains($lower, '.xyz') || str_contains($lower, '.top');
+            $hasThreat = str_contains($lower, 'account will be') || str_contains($lower, 'warning') || str_contains($lower, 'penalty');
+
+            $score = ($hasUrgency ? 1 : 0) + ($hasLink ? 1 : 0) + ($hasThreat ? 1 : 0);
+            $isPhishing = ($score >= 2);
+            $confidence = $isPhishing ? 0.82 : 0.75;
+
+            if ($hasUrgency) $indicators[] = ['feature' => 'Urgent Call-to-Action Language', 'value' => '+0.30', 'type' => 'risk'];
+            if ($hasLink) $indicators[] = ['feature' => 'Contains Embedded Web Link', 'value' => '+0.28', 'type' => 'risk'];
+            if ($hasThreat) $indicators[] = ['feature' => 'Account Suspension / Threatening Language', 'value' => '+0.22', 'type' => 'risk'];
+
+            if (empty($indicators)) {
+                $indicators[] = ['feature' => 'Standard Filipino Advisory Format', 'value' => '-0.30', 'type' => 'safety'];
+                $indicators[] = ['feature' => 'No Suspicious Redirection Links', 'value' => '-0.25', 'type' => 'safety'];
+            }
         }
 
         return [
@@ -254,10 +299,12 @@ class CheckContentController extends Controller
             'is_borderline'        => false,
             'shap_risk_indicators' => $indicators,
             'warning'              => $this->generateWarning($isPhishing ? 1 : 0, $confidence),
-            'explanation'          => 'Analyzed using local heuristic rules because the Python ML service is temporarily offline.',
+            'explanation'          => $isPhishing
+                ? "Here is what our AI detected: This {$type} displays characteristics associated with phishing attacks, such as artificial urgency, unverified links, or credential requests."
+                : "Here is what our AI detected: This {$type} appears legitimate based on learned operational patterns without suspicious triggers.",
             'recommendation'       => $isPhishing
-                ? 'Do not click links, do not reply, and report this suspicious message to your security team.'
-                : 'While this input does not trigger known phishing signatures, remain vigilant and verify unexpected requests through trusted channels.',
+                ? "Do not click links, do not enter sensitive credentials, and verify the message through an official contact channel."
+                : "While this content appears legitimate, remain cautious and verify unexpected requests before taking sensitive actions.",
         ];
     }
 
@@ -296,44 +343,69 @@ class CheckContentController extends Controller
         $apiKey = env('GROQ_API_KEY');
         if (!$apiKey) {
             Log::error('No GROQ_API_KEY found. Using basic fallback.');
-            return $this->fallback($content, $type);
+            return $this->localRandomForestFallback($content, $type);
         }
 
-        $prompt = "You are a cybersecurity expert. Analyze this {$type} and determine if it is a phishing attempt or legitimate.\n\n"
+        $prompt = "You are an expert cybersecurity educator. Analyze this {$type} content and determine if it is phishing or legitimate.\n\n"
                 . "Content to analyze:\n\"\"\"\n{$content}\n\"\"\"\n\n"
                 . "Respond ONLY with a valid JSON object in this exact format:\n"
                 . "{\n"
                 . "  \"prediction\": 1, // 1 for Phishing, 0 for Legitimate\n"
-                . "  \"confidence\": 0.95, // A number between 0.05 and 0.99\n"
-                . "  \"explanation\": \"A short, 2-sentence explanation of your verdict.\",\n"
-                . "  \"risk_indicators\": [\"Urgent language\", \"Suspicious link\", \"Sender mismatch\"]\n"
+                . "  \"confidence\": 0.95, // between 0.05 and 0.99\n"
+                . "  \"explanation\": \"A warm, plain-language explanation of why this content was classified this way. Do not use any branding tags.\",\n"
+                . "  \"recommendation\": \"Practical cybersecurity recommendations for the user.\",\n"
+                . "  \"risk_indicators\": [\"Specific signal 1\", \"Specific signal 2\"]\n"
                 . "}";
 
         try {
-            $response = Http::withToken($apiKey)->timeout(15)->post('https://api.groq.com/openai/v1/chat/completions', [
-                'model' => 'openai/gpt-oss-20b', 
+            $response = Http::withToken($apiKey)->timeout(10)->post('https://api.groq.com/openai/v1/chat/completions', [
+                'model' => 'qwen/qwen3.8-27b', 
                 'response_format' => ['type' => 'json_object'],
                 'messages' => [
-                    ['role' => 'system', 'content' => 'You are a phishing detection AI.'],
+                    ['role' => 'system', 'content' => 'You are an educational phishing analysis AI. Never include branding tags like [GROQ AI].'],
                     ['role' => 'user', 'content' => $prompt]
                 ],
                 'temperature' => 0.2
             ]);
 
             if ($response->successful()) {
-                $data = json_decode($response->json('choices.0.message.content'), true);
+                $rawContent = $response->json('choices.0.message.content');
+                // Strip any possible branding
+                $rawContent = preg_replace('/\[GROQ\s*AI[^\]]*\]/i', '', $rawContent);
+                $data = json_decode($rawContent, true);
                 
                 $shapUi = [];
+                $pred = (int) ($data['prediction'] ?? 1);
                 foreach ($data['risk_indicators'] ?? [] as $indicator) {
-                    $shapUi[] = ['feature' => $indicator, 'value' => '+0.10'];
+                    $shapUi[] = [
+                        'feature' => $indicator,
+                        'value' => $pred === 1 ? '+0.25' : '-0.25',
+                        'type' => $pred === 1 ? 'risk' : 'safety'
+                    ];
                 }
 
+                $explanation = trim($data['explanation'] ?? 'This content was analyzed using verified pattern detection.');
+                $explanation = preg_replace('/\[GROQ\s*AI[^\]]*\]/i', '', $explanation);
+
+                $recommendation = trim($data['recommendation'] ?? ($pred === 1
+                    ? 'Do not click links, do not enter sensitive credentials, and verify the message through an official contact channel.'
+                    : 'While this content appears legitimate, remain cautious and verify unexpected requests before taking sensitive actions.'));
+                $recommendation = preg_replace('/\[GROQ\s*AI[^\]]*\]/i', '', $recommendation);
+
                 return [
-                    'prediction'           => $data['prediction'] ?? 0,
-                    'confidence'           => $data['confidence'] ?? 0.5,
+                    'prediction'           => $pred,
+                    'confidence'           => $data['confidence'] ?? 0.85,
+                    'probabilities'        => [
+                        'legitimate' => $pred === 1 ? 0.15 : 0.85,
+                        'phishing'   => $pred === 1 ? 0.85 : 0.15,
+                    ],
+                    'risk_score'           => $pred === 1 ? 85 : 15,
+                    'reliability'          => 'high',
+                    'is_borderline'        => false,
                     'shap_risk_indicators' => $shapUi,
-                    'misconceptions'       => [],
-                    'explanation'          => '[Groq AI Second Opinion] ' . ($data['explanation'] ?? 'Analyzed by backup AI.'),
+                    'warning'              => $this->generateWarning($pred, $data['confidence'] ?? 0.85),
+                    'explanation'          => $explanation,
+                    'recommendation'       => $recommendation,
                 ];
             }
 

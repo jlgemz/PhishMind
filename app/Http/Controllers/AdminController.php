@@ -291,7 +291,7 @@ class AdminController extends Controller
             fputcsv($file, [
                 'Record ID', 'Student Name', 'Student Email', 'Scenario',
                 'Model Prediction', 'Student Decision', 'Confidence',
-                'Mastery Achieved', 'Date',
+                'Correct attempts', 'Date',
             ]);
 
             foreach ($records as $record) {
