@@ -148,6 +148,21 @@ class AdaptiveLearningController extends Controller
         $confidence      = max(0.05, min(0.98, $confidence));
         $isMastered      = ((bool) $scenario->is_phishing === (bool) $validated['student_decision']);
 
+        $targetedPractice = $mlResult['targeted_practice'] ?? [];
+        if (!empty($mlResult['recommendation'])) {
+            if (is_array($targetedPractice)) {
+                $targetedPractice['recommendation'] = $mlResult['recommendation'];
+            } else {
+                $targetedPractice = ['recommendation' => $mlResult['recommendation']];
+            }
+        }
+
+        $rawExplanation = $mlResult['explanation'] ?? 'This scenario was evaluated against verified security patterns.';
+        $cleanExplanation = preg_replace('/\b\d+(\.\d+)?%\b/', 'high', $rawExplanation);
+        $cleanExplanation = preg_replace('/\([+-]?\d+(\.\d+)?\)/', '', $cleanExplanation);
+        $cleanExplanation = preg_replace('/\s{2,}/', ' ', $cleanExplanation);
+        $cleanExplanation = trim($cleanExplanation);
+
         $record = LearningRecord::create([
             'user_id'              => auth()->id(),
             'scenario_id'          => $scenario->id,
@@ -157,8 +172,8 @@ class AdaptiveLearningController extends Controller
             'model_confidence'     => round($confidence * 100),
             'shap_risk_indicators' => $mlResult['shap_risk_indicators'] ?? [],
             'misconceptions'       => $mlResult['misconceptions'] ?? [],
-            'targeted_practice'    => $mlResult['targeted_practice'] ?? [],
-            'llm_explanation'      => $mlResult['explanation'] ?? 'The AI explanation could not be generated.',
+            'targeted_practice'    => $targetedPractice,
+            'llm_explanation'      => $cleanExplanation,
             'mastery_achieved'     => $isMastered,
             'session_type'         => $validated['session_type'] ?? 'practice',
             'attempts'             => 1,
@@ -212,8 +227,8 @@ class AdaptiveLearningController extends Controller
                 ['feature' => 'No Credential Harvesting Requests', 'value' => '-0.15'],
             ];
             $rec = $scenario->is_phishing
-                ? "Cybersecurity Recommendation:\n• Never tap links or enter PIN/OTP codes from unsolicited SMS messages.\n• Contact your bank or service provider through their official mobile app or customer hotline."
-                : "Cybersecurity Recommendation:\n• This notification appears authentic. Remember that genuine banks never request your password or OTP over SMS.";
+                ? "• Never tap links or open web shortcuts sent in unexpected text messages.\n• Never share one-time passcodes (OTP), account passwords, or banking PINs over SMS—authentic organizations never ask for them by text.\n• Forward spam or suspicious text messages to your phone carrier spam service (such as 7726) and verify your account status directly inside the official mobile app."
+                : "• This text notification appears authentic. However, always remember that genuine institutions will never ask for your password or verification codes over SMS.\n• If a text message instructs you to take urgent action, independently open the provider's official mobile application instead of tapping links.";
         } elseif (str_contains($type, 'email')) {
             $modality = 'Email';
             $indicators = $scenario->is_phishing ? [
@@ -226,8 +241,8 @@ class AdaptiveLearningController extends Controller
                 ['feature' => 'No Credential Harvesting Requests', 'value' => '-0.19'],
             ];
             $rec = $scenario->is_phishing
-                ? "Cybersecurity Recommendation:\n• Do not click any links or download attachments.\n• Forward this email to your organization's IT security team and delete it."
-                : "Cybersecurity Recommendation:\n• Authentic correspondence. Always verify the sender's full email address if an unexpected action is requested.";
+                ? "• Check the sender's full email address and domain name in the message header, not just the displayed name.\n• Avoid clicking links or opening unexpected attachments from unsolicited or urgent emails.\n• Forward the suspicious email to your organization's IT security team, and verify any urgent request by contacting the sender on a known official phone number."
+                : "• This email appears authentic and follows standard communication formats.\n• Always verify the sender's complete email address if an unexpected request arrives, and never share credentials over email.";
         } else {
             $modality = 'URL';
             $indicators = $scenario->is_phishing ? [
@@ -240,12 +255,12 @@ class AdaptiveLearningController extends Controller
                 ['feature' => 'Standard Domain Character Length', 'value' => '-0.16'],
             ];
             $rec = $scenario->is_phishing
-                ? "Cybersecurity Recommendation:\n• Do not enter login credentials or personal information on this site.\n• Check the browser address bar carefully for typosquatting or strange extensions."
-                : "Cybersecurity Recommendation:\n• Verified legitimate web address. Ensure you always look for valid HTTPS encryption before signing in.";
+                ? "• Carefully examine the full address in your browser address bar for misspelled names, extra subdomains, or deceptive extensions like .xyz or .top.\n• Never enter your login password, payment cards, or sensitive personal details on an unverified web page.\n• Navigate to trusted websites by typing their known official address directly into the browser address bar or using saved bookmarks."
+                : "• This web address matches expected legitimate patterns. Always verify that the domain name is spelled correctly before logging in.\n• Remember that having HTTPS or a lock icon only encrypts the connection—it does not automatically guarantee who owns the website.";
         }
 
         $verdictStr = $scenario->is_phishing ? 'phishing' : 'legitimate';
-        $explanation = "Here is what our AI detected: This {$modality} scenario exhibits structural and lexical patterns consistent with {$verdictStr} communication.\n\n{$rec}";
+        $explanation = "This {$modality} scenario exhibits structural and language patterns consistent with {$verdictStr} communication.";
 
         return [
             'prediction'           => $scenario->is_phishing,
@@ -254,15 +269,18 @@ class AdaptiveLearningController extends Controller
             'shap_risk_indicators' => $indicators,
             'misconceptions'       => !$isCorrect ? [
                 [
-                    'name'        => "Deceptive {$modality} Pattern",
-                    'description' => "Pay close attention to {$modality}-specific indicators such as domain spelling, urgency cues, and unverified links."
+                    'name'           => "Deceptive {$modality} Pattern",
+                    'description'    => "Pay close attention to {$modality}-specific indicators such as domain spelling, urgency cues, and unverified links.",
+                    'recommendation' => $rec,
                 ]
             ] : [],
-            'targeted_practice'    => !$isCorrect ? [
-                "Review {$modality} sender domain and link destinations carefully.",
-                'Cross-check unexpected alerts with official support channels.'
-            ] : ['Keep up the great work!'],
+            'targeted_practice'    => [
+                'goal'           => "Review {$modality} sender details and link destinations carefully.",
+                'focus_question' => "How can you independently verify the authenticity of this {$modality}?",
+                'recommendation' => $rec,
+            ],
             'explanation'          => $explanation,
+            'recommendation'       => $rec,
         ];
     }
 }

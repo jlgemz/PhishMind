@@ -188,9 +188,39 @@
                 @if($recText)
                     <p class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{{ $recText }}</p>
                 @elseif($record->scenario && $record->scenario->is_phishing)
-                    <p class="text-sm text-slate-700">Do not use the link or reply. Report this message to your security team and delete it.</p>
+                    @php
+                        $scType = strtolower($record->scenario->type ?? '');
+                    @endphp
+                    @if(str_contains($scType, 'sms'))
+                        <div class="text-sm text-slate-700 leading-relaxed space-y-1.5">
+                            <p>• Never tap on links or short URLs sent in unsolicited text messages.</p>
+                            <p>• Never share one-time passcodes (OTP), account passwords, or banking PINs over SMS.</p>
+                            <p>• Forward spam or suspicious text messages to your phone carrier spam service (such as 7726) and check your account status directly inside the official mobile app.</p>
+                        </div>
+                    @elseif(str_contains($scType, 'email'))
+                        <div class="text-sm text-slate-700 leading-relaxed space-y-1.5">
+                            <p>• Check the sender's full email address and domain name in the message header, not just the displayed name.</p>
+                            <p>• Avoid clicking links or opening unexpected attachments from unsolicited or urgent emails.</p>
+                            <p>• Forward the suspicious email to your organization's IT security team, and verify any urgent request by calling the sender on a known official number.</p>
+                        </div>
+                    @else
+                        <div class="text-sm text-slate-700 leading-relaxed space-y-1.5">
+                            <p>• Carefully examine the full address in your browser address bar for misspelled names or strange extensions (.xyz, .top).</p>
+                            <p>• Never enter your login password, payment cards, or sensitive personal details on an unverified web page.</p>
+                            <p>• Navigate to trusted websites by typing their known official address directly into the browser address bar or using bookmarks.</p>
+                        </div>
+                    @endif
                 @else
-                    <p class="text-sm text-slate-700">This appears to be a legitimate message. You can proceed, but always double-check the sender if anything feels unusual.</p>
+                    @php
+                        $scType = strtolower($record->scenario->type ?? '');
+                    @endphp
+                    @if(str_contains($scType, 'sms'))
+                        <p class="text-sm text-slate-700 leading-relaxed">This text notification appears authentic. Remember that genuine banks and universities never request passwords or OTP codes over SMS.</p>
+                    @elseif(str_contains($scType, 'email'))
+                        <p class="text-sm text-slate-700 leading-relaxed">This email appears authentic. Always verify the sender's full email address if an unexpected action or attachment is requested.</p>
+                    @else
+                        <p class="text-sm text-slate-700 leading-relaxed">This web address matches official domain patterns. Always confirm the domain name is spelled correctly before submitting credentials.</p>
+                    @endif
                 @endif
             </div>
         </div>

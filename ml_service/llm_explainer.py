@@ -38,6 +38,88 @@ OLLAMA_HOST = raw_host.replace("0.0.0.0", "127.0.0.1").rstrip("/")
 QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen3.5:2b")
 
 
+def clean_plain_language_text(text: str) -> str:
+    """
+    Ensures plain-language explanation contains simple words and NO numbers, percentages,
+    or statistical symbols.
+    """
+    if not text:
+        return ""
+    # Remove AI branding if any slipped in
+    t = re.sub(r'\[GROQ\s*AI[^\]]*\]', '', text, flags=re.IGNORECASE)
+    t = re.sub(r'\[AI\s*Model[^\]]*\]', '', t, flags=re.IGNORECASE)
+    
+    # Remove SHAP-style weights like (+0.32) or (-0.15)
+    t = re.sub(r'\([+-]?\d+(\.\d+)?\)', '', t)
+    # Remove percentage figures like 85% or 95.2%
+    t = re.sub(r'\b\d+(\.\d+)?%\b', 'high', t)
+    # Remove standalone decimal numbers
+    t = re.sub(r'\b\d+\.\d+\b', '', t)
+    # Remove feature count references like "(39 Features)" or "39 features"
+    t = re.sub(r'\b\d+\s*features?\b', 'multiple security signals', t, flags=re.IGNORECASE)
+    # Remove standalone large numbers (like 2026, 100, etc.) if they were output as statistics
+    t = re.sub(r'\b(confidence|probability|score)\s*of\s*\d+\b', r'\1', t, flags=re.IGNORECASE)
+    
+    # Clean double spaces or broken punctuation
+    t = re.sub(r'\s{2,}', ' ', t)
+    t = re.sub(r'\s+([.,!?])', r'\1', t)
+    return t.strip()
+
+
+def _format_indicators_no_numbers(raw_indicators) -> str:
+    """Format indicators for LLM context without numerical weights."""
+    formatted = []
+    for item in raw_indicators:
+        if isinstance(item, dict):
+            name = item.get("plain_name") or item.get("feature") or str(item)
+            formatted.append(f"- {name}")
+        else:
+            cleaned = re.sub(r'\s*\([+-]?\d+\.?\d*\)', '', str(item)).strip()
+            formatted.append(f"- {cleaned}")
+    return "\n".join(formatted) or "- Standard communication profile"
+
+
+def _get_modality_recommendation(modality: str, is_phishing: bool) -> str:
+    """Returns tailored cybersecurity recommendations strictly matching the modality."""
+    m = (modality or "").lower()
+    if "sms" in m or "text" in m or "message" in m:
+        if is_phishing:
+            return (
+                "• Never tap on links or short URLs sent in unsolicited text messages.\n"
+                "• Never share one-time passcodes (OTP), account passwords, or banking PINs over SMS—legitimate institutions never request them by text.\n"
+                "• Forward spam or suspicious text messages to your phone carrier spam service (such as 7726) and check your account status directly inside the official mobile app."
+            )
+        else:
+            return (
+                "• This text message appears authentic. However, always remember that genuine organizations will never ask for your password, PIN, or security codes over SMS.\n"
+                "• If a text message ever instructs you to take urgent account action, independently open the provider's official mobile application instead of following text links."
+            )
+    elif "email" in m:
+        if is_phishing:
+            return (
+                "• Check the sender's full email address and domain name in the message header, not just the displayed name.\n"
+                "• Avoid clicking links or opening unexpected attachments from unsolicited or urgent emails.\n"
+                "• Forward the suspicious email to your organization's IT security team, and verify any urgent request by contacting the sender on a known official phone number."
+            )
+        else:
+            return (
+                "• This email appears authentic and follows standard communication formats.\n"
+                "• Always verify the sender's complete email address if an unexpected request or attachment arrives, and never share credentials over email."
+            )
+    else:  # URL / Web
+        if is_phishing:
+            return (
+                "• Carefully examine the full address in your browser address bar for misspelled names, extra subdomains, or deceptive extensions like .xyz or .top.\n"
+                "• Never enter your login password, payment cards, or sensitive personal details on an unverified web page.\n"
+                "• Navigate to trusted websites by typing their known official address directly into the browser address bar or using saved bookmarks."
+            )
+        else:
+            return (
+                "• This web address matches expected legitimate patterns. Always verify that the domain name is spelled correctly before logging in.\n"
+                "• Remember that having HTTPS or a lock icon only encrypts the connection—it does not automatically guarantee who owns the website."
+            )
+
+
 def _call_groq_api(prompt: str, json_mode: bool = True) -> dict | str | None:
     api_key = _load_groq_api_key() or GROQ_API_KEY
     if not api_key:
@@ -97,7 +179,7 @@ def generate_adaptive_feedback(feedback_payload: dict) -> dict:
     """
     Evaluates practice scenario attempts with dynamic misconception analysis
     based on the user's submitted reasoning, and generates plain-language explanations
-    and cybersecurity recommendations via Groq API.
+    using simple words (zero numbers) and modality-specific cybersecurity recommendations via Groq API.
     """
     content = feedback_payload.get("content", "")
     modality = feedback_payload.get("modality", "Unknown")
@@ -109,20 +191,11 @@ def generate_adaptive_feedback(feedback_payload: dict) -> dict:
     student_decision = "Phishing" if student_is_phish else "Legitimate"
     ground_truth = "Phishing" if ground_truth_is_phish else "Legitimate"
     student_reasoning = feedback_payload.get("student_reasoning", "").strip()
-    conf = feedback_payload.get("ml_confidence", 85)
 
     raw_indicators = feedback_payload.get("verified_risk_indicators", [])
-    formatted_indicators = []
-    for item in raw_indicators:
-        if isinstance(item, dict):
-            name = item.get("plain_name") or item.get("feature") or str(item)
-            val = item.get("contribution") or item.get("value") or ""
-            formatted_indicators.append(f"- {name} ({val})".strip())
-        else:
-            formatted_indicators.append(f"- {item}")
-    indicators_str = "\n".join(formatted_indicators) or "- Standard feature profile"
+    indicators_str = _format_indicators_no_numbers(raw_indicators)
 
-    prompt = f"""You are evaluating a student in a cybersecurity practice lab.
+    prompt = f"""You are a friendly cybersecurity educator evaluating a student in a practice lab.
 Analyze the scenario, the student's answer, and especially their submitted reasoning to diagnose their exact misconception.
 
 [SCENARIO]
@@ -137,22 +210,28 @@ Student Reasoning:
 \"\"\"{student_reasoning}\"\"\"
 Result: {'Correct' if is_correct else 'Incorrect (Needs Review)'}
 
-[MODEL-VERIFIED EVIDENCE]
+[OBSERVED SIGNALS]
 {indicators_str}
 
 [TASK]
 Respond ONLY with a valid JSON object in this exact format:
 {{
-  "explanation": "A warm, conversational plain-language explanation (under 120 words) explaining why this {modality} is {ground_truth.lower()} so the student grasps the core concept clearly.",
-  "misconception": {{"name": "Specific misconception title diagnosed from what the student wrote", "description": "Detailed explanation of why their reasoning was flawed and what deceptive trap led them astray"}} if student was incorrect, or null if student was correct,
-  "recommendation": "2-3 practical, actionable cybersecurity steps the user should take.",
-  "targeted_practice": ["Actionable focus question for their next attempt", "Second question to test the concept"]
+  "explanation": "A friendly, simple explanation (under 100 words) using ONLY simple words explaining why this {modality} is {ground_truth.lower()}.",
+  "misconception": {{"name": "Misconception title diagnosed from what the student wrote", "description": "Why their reasoning was flawed and what deceptive trap led them astray"}} if student was incorrect, or null if student was correct,
+  "recommendation": "2-3 bulleted cybersecurity action steps specifically tailored to handle {modality} threats.",
+  "targeted_practice": ["Actionable focus question for their next attempt in this {modality}", "Second question to test the concept"]
 }}
 
-Important rules:
-1. If the student was incorrect, identify the specific misconception DIRECTLY from their reasoning (e.g. assuming HTTPS means safety, trusting familiar logos, falling for urgency, ignoring strange domains).
-2. Do NOT use static or generic misconceptions. Tailor it to what they actually wrote.
-3. NEVER include any branding like [GROQ AI] or similar prefixes."""
+CRITICAL RULES:
+1. ONLY SIMPLE WORDS AND ZERO NUMBERS: The explanation must use simple, everyday language that any student can easily grasp. DO NOT INCLUDE ANY NUMBERS, percentages, scores, decimal values, counts, or statistical weights anywhere in the explanation. Explain entirely in plain words.
+2. MODALITY-SPECIFIC CYBERSECURITY RECOMMENDATION:
+   - The recommendation must be specifically and directly tailored to the scenario's modality:
+     * If URL / Web: Focus on inspecting the browser address bar for lookalike domains or deceptive extensions (.xyz, .top), never typing passwords on unverified web pages, and bookmarking official campus links.
+     * If Email: Focus on checking sender email headers, never opening unexpected attachments, forwarding suspicious emails to the IT security office, and verifying requests via an official phone directory.
+     * If SMS / Text: Focus on never tapping embedded links in text messages, never sharing OTPs or banking codes, forwarding smishing texts to carrier spam reporting (7726), and verifying directly in the official mobile app.
+   Format with bullet points (•).
+3. DYNAMIC MISCONCEPTION: If the student was incorrect, diagnose their specific misconception directly from what they wrote in their reasoning (e.g. assuming HTTPS equals safety, trusting a formal tone, falling for urgency, or overlooking unverified links).
+4. NO AI BRANDING: Never include any branding or labels like [GROQ AI] or model names."""
 
     groq_res = _call_groq_api(prompt, json_mode=True)
     if isinstance(groq_res, dict) and "explanation" in groq_res:
@@ -165,16 +244,17 @@ Important rules:
                     rec_str = "\n".join(f"• {r}" for r in rec_val)
                 else:
                     rec_str = str(rec_val or "")
-                m["recommendation"] = rec_str
+                m["recommendation"] = rec_str or _get_modality_recommendation(modality, ground_truth_is_phish)
                 misconceptions.append(m)
 
         if not misconceptions and not is_correct:
-            # Fallback dynamic misconception from reasoning if JSON missed it
             misconceptions.append(_diagnose_misconception_heuristic(student_reasoning, modality))
 
         rec = groq_res.get("recommendation", "")
         if isinstance(rec, list):
             rec = "\n".join(f"• {r}" for r in rec)
+        if not rec or len(rec.strip()) < 10:
+            rec = _get_modality_recommendation(modality, ground_truth_is_phish)
 
         practice = groq_res.get("targeted_practice", [])
         if not isinstance(practice, list) or not practice:
@@ -183,32 +263,32 @@ Important rules:
                 "What structural indicators differ between legitimate and lookalike messages?"
             ]
 
+        clean_exp = clean_plain_language_text(groq_res.get("explanation", ""))
+
         return {
-            "explanation": groq_res.get("explanation", "").strip(),
+            "explanation": clean_exp,
             "misconceptions": misconceptions,
             "recommendation": rec.strip(),
             "targeted_practice": practice
         }
 
-    # Fallback to local heuristic / Ollama
+    # Fallback to local heuristic
     return _fallback_adaptive_feedback(feedback_payload)
 
 
-def generate_explanation(feedback_payload: dict) -> str:
+def generate_explanation_and_recommendation(feedback_payload: dict) -> dict:
     """
-    Generates plain-language explanation for Check Content (/analyze) and general results.
+    Generates plain-language explanation (simple words, zero numbers) AND
+    modality-specific cybersecurity recommendations for Check Content (/analyze).
     """
     content = feedback_payload.get("content", "")
     modality = feedback_payload.get("modality", "content")
     verdict = "Phishing" if feedback_payload.get("ml_prediction") == 1 else "Legitimate"
-    conf = feedback_payload.get("ml_confidence", 85)
+    is_phish = (feedback_payload.get("ml_prediction") == 1)
 
-    indicators_str = "\n".join(
-        f"- {i['plain_name']} ({i['contribution']})"
-        for i in feedback_payload.get("verified_risk_indicators", [])
-    ) or "- Standard feature profile"
+    indicators_str = _format_indicators_no_numbers(feedback_payload.get("verified_risk_indicators", []))
 
-    prompt = f"""You are an encouraging AI cybersecurity assistant explaining content analysis to a user in plain language.
+    prompt = f"""You are a friendly cybersecurity educator explaining content analysis to a regular user in plain language.
 
 [ANALYZED CONTENT]
 Modality: {modality}
@@ -216,20 +296,49 @@ Content:
 \"\"\"{content[:400]}\"\"\"
 
 [VERDICT & EVIDENCE]
-Classification: {verdict} (Confidence: {conf}%)
-Signals Detected:
+Classification: {verdict}
+Observed Signals:
 {indicators_str}
 
-Explain in clear, conversational terms why this content was classified as {verdict.lower()}. 
-Make it easy for any non-technical user to understand what signals made it safe or risky.
-Keep it under 140 words. Do NOT include any branding or prefixes like [GROQ AI]."""
+Respond ONLY with a valid JSON object in this exact format:
+{{
+  "explanation": "A simple, non-technical plain-language explanation of why this was identified as {verdict.lower()}.",
+  "recommendation": "2-3 bulleted cybersecurity steps specifically tailored to handle {modality} phishing threats."
+}}
 
-    groq_res = _call_groq_api(prompt, json_mode=False)
-    if groq_res and len(groq_res) > 20:
-        return groq_res.strip()
+CRITICAL INSTRUCTIONS:
+1. ONLY SIMPLE WORDS AND ZERO NUMBERS: Explain entirely in simple words. DO NOT INCLUDE ANY NUMBERS, percentages, scores, decimal values, counts, or statistical weights anywhere in the explanation.
+2. MODALITY-SPECIFIC CYBERSECURITY RECOMMENDATION:
+   - If {modality} is URL / Web: Focus on inspecting the browser address bar for subtle misspellings or odd extensions, avoiding entering passwords on unverified sites, and typing trusted addresses directly.
+   - If {modality} is Email: Focus on checking sender email headers, not opening unexpected attachments, and forwarding suspicious emails to IT security.
+   - If {modality} is SMS: Focus on never tapping links in unsolicited text messages, never sharing OTPs or banking codes, and reporting smishing to carrier spam (7726).
+   Format with bullet points (•).
+3. NO AI BRANDING: Never include any branding or labels like [GROQ AI] or model names."""
 
-    # Fallback to rule-based plain explanation
-    return _fallback_plain_explanation(feedback_payload)
+    groq_res = _call_groq_api(prompt, json_mode=True)
+    if isinstance(groq_res, dict) and "explanation" in groq_res:
+        exp = clean_plain_language_text(groq_res.get("explanation", ""))
+        rec = groq_res.get("recommendation", "")
+        if isinstance(rec, list):
+            rec = "\n".join(f"• {r}" for r in rec)
+        return {
+            "explanation": exp,
+            "recommendation": rec.strip() or _get_modality_recommendation(modality, is_phish)
+        }
+
+    return {
+        "explanation": clean_plain_language_text(_fallback_plain_explanation(feedback_payload)),
+        "recommendation": _get_modality_recommendation(modality, is_phish)
+    }
+
+
+def generate_explanation(feedback_payload: dict) -> str:
+    """
+    Generates plain-language explanation for Check Content (/analyze) and general results.
+    Strictly uses simple words and zero numbers.
+    """
+    res = generate_explanation_and_recommendation(feedback_payload)
+    return res.get("explanation", "")
 
 
 def _diagnose_misconception_heuristic(reasoning: str, modality: str) -> dict:
@@ -276,14 +385,7 @@ def _fallback_adaptive_feedback(payload: dict) -> dict:
     if not is_correct:
         misconceptions.append(_diagnose_misconception_heuristic(reasoning, modality))
 
-    rec = (
-        "• Never click unknown links or disclose sensitive credentials like passwords or OTPs.\n"
-        "• Independently verify unexpected requests through official contact numbers or direct portal logins.\n"
-        "• Report suspicious correspondence to your security administrator immediately."
-    ) if ground_truth == "Phishing" else (
-        "• Authentic correspondence. Always verify sender address before taking sensitive actions.\n"
-        "• Remember that authentic institutions never ask for your password or PIN via SMS or unprompted email."
-    )
+    rec = _get_modality_recommendation(modality, ground_truth == "Phishing")
 
     practice = [
         f"In the next example, how can you independently verify who controls this {modality.lower()}?",
@@ -302,36 +404,24 @@ def _fallback_adaptive_feedback(payload: dict) -> dict:
 
 def _fallback_plain_explanation(payload: dict) -> str:
     is_phish = (payload.get('ml_prediction') == 1) or (payload.get('ground_truth') == 1)
-    conf = payload.get('ml_confidence', 85)
-    indicators = payload.get('verified_risk_indicators', [])
     modality = payload.get('modality', 'content')
 
     if is_phish:
-        lines = [
-            f"Here is what our AI detected: This {modality} displays distinct indicators associated with phishing attempts (AI Confidence: {conf}%). "
-            f"The analysis flagged the following warning factors:",
-        ]
-        for ind in indicators[:3]:
-            lines.append(f"• {ind['plain_name']}: {ind['contribution']} contribution to risk")
-        lines.append("\nThis content uses deceptive techniques to prompt sensitive action under false pretenses.")
+        return (
+            f"This {modality} was identified as suspicious because it displays warning signs commonly found in phishing scams. "
+            f"The message attempts to create artificial urgency, directs you to an unverified destination, or requests sensitive details under false pretenses. "
+            f"Always treat unexpected requests with extreme caution."
+        )
     else:
-        lines = [
-            f"Here is what our AI detected: This {modality} appears to be legitimate based on learned structural and behavioral patterns (AI Confidence: {conf}%). "
-            f"No malicious lures or credential harvesting requests were identified:",
-        ]
-        for ind in indicators[:3]:
-            lines.append(f"• {ind['plain_name']}: {ind['contribution']} safety alignment")
-        lines.append("\nThe communication matches standard operational patterns without suspicious redirect triggers.")
-
-    return "\n".join(lines)
+        return (
+            f"This {modality} appears legitimate based on standard communication patterns. "
+            f"It does not contain suspicious redirection links, credential harvesting lures, or alarming pressure tactics. "
+            f"Even so, always remain attentive before sharing any private information."
+        )
 
 
 def _format_indicators(indicators):
-    if not indicators:
-        return "No strong risk signals detected."
-    return "\n".join(
-        f"- {i['plain_name']} ({i['contribution']})" for i in indicators
-    )
+    return _format_indicators_no_numbers(indicators)
 
 
 def _fallback_explanation(payload, error):

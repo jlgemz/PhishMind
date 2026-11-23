@@ -287,6 +287,24 @@ class CheckContentController extends Controller
             }
         }
 
+        $exp = $isPhishing
+            ? "This {$type} was identified as suspicious because it displays warning signs commonly found in phishing scams. The message attempts to create artificial urgency, directs you to an unverified destination, or requests sensitive details under false pretenses. Always treat unexpected requests with extreme caution."
+            : "This {$type} appears legitimate based on standard communication patterns. It does not contain suspicious redirection links, credential harvesting lures, or alarming pressure tactics. Even so, always remain attentive before sharing any private information.";
+
+        if ($type === 'sms') {
+            $rec = $isPhishing
+                ? "• Never tap links or open web shortcuts sent in unexpected text messages.\n• Never share one-time passcodes (OTP), account passwords, or banking PINs over SMS—authentic organizations never ask for them by text.\n• Forward spam or suspicious text messages to your phone carrier spam service (such as 7726) and verify your account status directly inside the official mobile app."
+                : "• This text notification appears authentic. However, always remember that genuine institutions will never ask for your password or verification codes over SMS.\n• If a text message instructs you to take urgent action, independently open the provider's official mobile application instead of tapping links.";
+        } elseif ($type === 'email') {
+            $rec = $isPhishing
+                ? "• Check the sender's full email address and domain name in the message header, not just the displayed name.\n• Avoid clicking links or opening unexpected attachments from unsolicited or urgent emails.\n• Forward the suspicious email to your organization's IT security team, and verify any urgent request by contacting the sender on a known official phone number."
+                : "• This email appears authentic and follows standard communication formats.\n• Always verify the sender's complete email address if an unexpected request arrives, and never share credentials over email.";
+        } else {
+            $rec = $isPhishing
+                ? "• Carefully examine the full address in your browser address bar for misspelled names, extra subdomains, or deceptive extensions like .xyz or .top.\n• Never enter your login password, payment cards, or sensitive personal details on an unverified web page.\n• Navigate to trusted websites by typing their known official address directly into the browser address bar or using saved bookmarks."
+                : "• This web address matches expected legitimate patterns. Always verify that the domain name is spelled correctly before logging in.\n• Remember that having HTTPS or a lock icon only encrypts the connection—it does not automatically guarantee who owns the website.";
+        }
+
         return [
             'prediction'           => $isPhishing ? 1 : 0,
             'confidence'           => $confidence,
@@ -299,12 +317,8 @@ class CheckContentController extends Controller
             'is_borderline'        => false,
             'shap_risk_indicators' => $indicators,
             'warning'              => $this->generateWarning($isPhishing ? 1 : 0, $confidence),
-            'explanation'          => $isPhishing
-                ? "Here is what our AI detected: This {$type} displays characteristics associated with phishing attacks, such as artificial urgency, unverified links, or credential requests."
-                : "Here is what our AI detected: This {$type} appears legitimate based on learned operational patterns without suspicious triggers.",
-            'recommendation'       => $isPhishing
-                ? "Do not click links, do not enter sensitive credentials, and verify the message through an official contact channel."
-                : "While this content appears legitimate, remain cautious and verify unexpected requests before taking sensitive actions.",
+            'explanation'          => $exp,
+            'recommendation'       => $rec,
         ];
     }
 
@@ -346,16 +360,21 @@ class CheckContentController extends Controller
             return $this->localRandomForestFallback($content, $type);
         }
 
-        $prompt = "You are an expert cybersecurity educator. Analyze this {$type} content and determine if it is phishing or legitimate.\n\n"
-                . "Content to analyze:\n\"\"\"\n{$content}\n\"\"\"\n\n"
+        $prompt = "You are an expert cybersecurity educator explaining a content analysis to a regular user in plain language.\n\n"
+                . "Analyzed {$type} content:\n\"\"\"\n{$content}\n\"\"\"\n\n"
                 . "Respond ONLY with a valid JSON object in this exact format:\n"
                 . "{\n"
                 . "  \"prediction\": 1, // 1 for Phishing, 0 for Legitimate\n"
                 . "  \"confidence\": 0.95, // between 0.05 and 0.99\n"
-                . "  \"explanation\": \"A warm, plain-language explanation of why this content was classified this way. Do not use any branding tags.\",\n"
-                . "  \"recommendation\": \"Practical cybersecurity recommendations for the user.\",\n"
-                . "  \"risk_indicators\": [\"Specific signal 1\", \"Specific signal 2\"]\n"
-                . "}";
+                . "  \"explanation\": \"A simple, clear explanation in simple words explaining why this content is safe or dangerous. EXPLAIN ONLY IN SIMPLE WORDS. DO NOT INCLUDE ANY NUMBERS, percentages, scores, decimal values, counts, or statistical figures anywhere in the explanation.\",\n"
+                . "  \"recommendation\": \"2-3 bulleted cybersecurity steps specifically tailored to handle {$type} phishing threats (inspecting browser address bar for URL, email headers for email, or not tapping SMS links for SMS).\",\n"
+                . "  \"risk_indicators\": [\"Specific plain signal 1\", \"Specific plain signal 2\"]\n"
+                . "}\n\n"
+                . "Critical Rules:\n"
+                . "1. Use simple everyday words.\n"
+                . "2. ZERO numbers in the explanation.\n"
+                . "3. Never include AI branding tags like [GROQ AI].\n"
+                . "4. The recommendation must directly address {$type} safety.";
 
         try {
             $response = Http::withToken($apiKey)->timeout(10)->post('https://api.groq.com/openai/v1/chat/completions', [
@@ -384,13 +403,32 @@ class CheckContentController extends Controller
                     ];
                 }
 
-                $explanation = trim($data['explanation'] ?? 'This content was analyzed using verified pattern detection.');
+                $explanation = trim($data['explanation'] ?? 'This content was analyzed using verified security patterns.');
                 $explanation = preg_replace('/\[GROQ\s*AI[^\]]*\]/i', '', $explanation);
+                // Ensure zero numbers or percentage symbols in explanation
+                $explanation = preg_replace('/\b\d+(\.\d+)?%\b/', 'high', $explanation);
+                $explanation = preg_replace('/\([+-]?\d+(\.\d+)?\)/', '', $explanation);
+                $explanation = preg_replace('/\b\d{2,}\b/', '', $explanation);
+                $explanation = preg_replace('/\s{2,}/', ' ', $explanation);
+                $explanation = trim($explanation);
 
-                $recommendation = trim($data['recommendation'] ?? ($pred === 1
-                    ? 'Do not click links, do not enter sensitive credentials, and verify the message through an official contact channel.'
-                    : 'While this content appears legitimate, remain cautious and verify unexpected requests before taking sensitive actions.'));
+                $recommendation = trim($data['recommendation'] ?? '');
                 $recommendation = preg_replace('/\[GROQ\s*AI[^\]]*\]/i', '', $recommendation);
+                if (empty($recommendation) || strlen($recommendation) < 10) {
+                    if ($type === 'sms') {
+                        $recommendation = $pred === 1
+                            ? "• Never tap links or open web shortcuts sent in unexpected text messages.\n• Never share one-time passcodes (OTP), account passwords, or banking PINs over SMS—authentic organizations never ask for them by text.\n• Forward spam or suspicious text messages to your phone carrier spam service (such as 7726) and verify your account status directly inside the official mobile app."
+                            : "• This text notification appears authentic. However, always remember that genuine institutions will never ask for your password or verification codes over SMS.\n• If a text message instructs you to take urgent action, independently open the provider's official mobile application instead of tapping links.";
+                    } elseif ($type === 'email') {
+                        $recommendation = $pred === 1
+                            ? "• Check the sender's full email address and domain name in the message header, not just the displayed name.\n• Avoid clicking links or opening unexpected attachments from unsolicited or urgent emails.\n• Forward the suspicious email to your organization's IT security team, and verify any urgent request by contacting the sender on a known official phone number."
+                            : "• This email appears authentic and follows standard communication formats.\n• Always verify the sender's complete email address if an unexpected request arrives, and never share credentials over email.";
+                    } else {
+                        $recommendation = $pred === 1
+                            ? "• Carefully examine the full address in your browser address bar for misspelled names, extra subdomains, or deceptive extensions like .xyz or .top.\n• Never enter your login password, payment cards, or sensitive personal details on an unverified web page.\n• Navigate to trusted websites by typing their known official address directly into the browser address bar or using saved bookmarks."
+                            : "• This web address matches expected legitimate patterns. Always verify that the domain name is spelled correctly before logging in.\n• Remember that having HTTPS or a lock icon only encrypts the connection—it does not automatically guarantee who owns the website.";
+                    }
+                }
 
                 return [
                     'prediction'           => $pred,

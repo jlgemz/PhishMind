@@ -15,7 +15,14 @@ if BASE_DIR not in sys.path:
 
 from model import PhishingMLModel
 from feature_extractor import FeatureExtractor
-from llm_explainer import generate_explanation, generate_adaptive_feedback, _fallback_explanation
+from llm_explainer import (
+    generate_explanation,
+    generate_explanation_and_recommendation,
+    generate_adaptive_feedback,
+    _fallback_explanation,
+    _get_modality_recommendation,
+    clean_plain_language_text,
+)
 
 # Feature definitions for modality-specific indicator filtering
 URL_FEATURES = {
@@ -354,27 +361,28 @@ async def predict_content(req: PredictRequest):
         shap_indicators = [{"feature": f"Standard {modality.upper()} Baseline Profile", "value": "0.00", "type": "neutral"}]
 
     # Warnings: Never claim an input is guaranteed safe simply because no known pattern was found
+    rec_text = _get_modality_recommendation(modality, prediction == 1)
+
     if prediction == 1:
         warning_text = (
-            f"Threat Detected: The Random Forest model identified patterns consistent with known phishing lures "
-            f"(Model Confidence: {confidence*100:.1f}%). Exercise caution and avoid clicking links or providing sensitive information."
+            f"Threat Detected: The Random Forest model identified patterns consistent with known phishing lures. "
+            f"Exercise caution and avoid clicking links or providing sensitive information."
         )
-        rec_text = "Do not click links, do not reply, and report this suspicious message to your security team immediately."
     else:
         warning_text = (
-            f"Notice: The Random Forest model classified this input as Legitimate based on learned patterns "
-            f"(Model Confidence: {confidence*100:.1f}%). However, absence of detected phishing signatures DOES NOT guarantee safety. "
-            f"Novel attack vectors, zero-day links, or compromised legitimate accounts may not be recognized by the model. Always verify sender identity independently."
+            f"Notice: The Random Forest model classified this input as Legitimate based on learned patterns. "
+            f"However, absence of detected phishing signatures does not guarantee safety. "
+            f"Novel attack vectors or compromised accounts may not be recognized by the model. Always verify sender identity independently."
         )
-        rec_text = "While this input does not match known phishing signatures, remain vigilant and verify unexpected requests through trusted out-of-band channels."
 
     if is_borderline:
         warning_text = (
-            f"Borderline / Uncertain Result: The model prediction has low confidence ({confidence*100:.1f}%), near the 50/50 decision boundary. "
+            f"Borderline / Uncertain Result: The model prediction has low confidence near the decision boundary. "
             f"This content displays ambiguous characteristics. Treat with extra suspicion."
         )
 
     feedback_payload = {
+        "content": raw_content,
         "modality": modality.upper(),
         "ml_prediction": prediction,
         "ml_confidence": round(confidence * 100, 1),
@@ -386,9 +394,13 @@ async def predict_content(req: PredictRequest):
     }
 
     try:
-        explanation = generate_explanation(feedback_payload)
+        fb_res = generate_explanation_and_recommendation(feedback_payload)
+        explanation = clean_plain_language_text(fb_res.get("explanation", ""))
+        ai_rec = fb_res.get("recommendation", "")
+        if ai_rec and len(ai_rec.strip()) > 10:
+            rec_text = ai_rec.strip()
     except Exception as e:
-        explanation = _fallback_explanation(feedback_payload, str(e))
+        explanation = clean_plain_language_text(_fallback_explanation(feedback_payload, str(e)))
 
     return {
         "status": "success",
@@ -491,10 +503,12 @@ async def adaptive_evaluate(req: AdaptiveRequest):
     }
 
     adaptive_fb = generate_adaptive_feedback(feedback_payload)
-    ai_explanation = adaptive_fb.get("explanation", "")
+    ai_explanation = clean_plain_language_text(adaptive_fb.get("explanation", ""))
     misconceptions = adaptive_fb.get("misconceptions", [])
     practice_suggestions = adaptive_fb.get("targeted_practice", [])
     recommendation = adaptive_fb.get("recommendation", "")
+    if not recommendation or len(recommendation.strip()) < 10:
+        recommendation = _get_modality_recommendation(modality_str, ground_truth_prediction)
 
     return {
         "prediction": ml_prediction,
