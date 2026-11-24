@@ -7,7 +7,7 @@
     <div class="mb-8">
         <p class="text-xs text-brand-teal font-semibold uppercase tracking-wider mb-2">DECISION SUPPORT</p>
         <h2 class="text-3xl font-bold text-slate-800 mb-2">Check suspicious content</h2>
-        <p class="text-slate-600">Paste a URL, email, or SMS message to see a Risk Assessment.</p>
+        <p class="text-slate-600">Paste a URL, email, or message to see a Risk Assessment.</p>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -16,7 +16,7 @@
             <form action="{{ route('check.analyze') }}" method="POST">
                 @csrf
                 <div class="mb-6">
-                    <label class="block text-sm font-bold text-slate-800 mb-3">Content type</label>
+                    <label class="block text-sm font-bold text-slate-800 mb-3">Content types:</label>
                     <div class="flex flex-wrap gap-2.5 sm:gap-3">
                         <label class="cursor-pointer flex-1 sm:flex-none">
                             <input type="radio" name="type" value="url" class="peer sr-only" checked>
@@ -33,7 +33,7 @@
                         <label class="cursor-pointer flex-1 sm:flex-none">
                             <input type="radio" name="type" value="sms" class="peer sr-only">
                             <div class="flex items-center justify-center gap-2 border border-slate-200 rounded-xl px-4 sm:px-5 py-2.5 text-slate-600 peer-checked:border-brand-teal peer-checked:bg-teal-50 peer-checked:text-brand-teal font-semibold transition min-h-[44px]">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg> SMS
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg> Messages
                             </div>
                         </label>
                     </div>
@@ -41,7 +41,7 @@
 
                 <div class="mb-6 sm:mb-8">
                     <label class="block text-sm font-bold text-slate-800 mb-2">Paste the content</label>
-                    <textarea name="content" rows="6" class="w-full border border-slate-200 rounded-xl p-4 text-sm font-mono focus:ring-2 focus:ring-brand-teal focus:border-brand-teal outline-none transition" placeholder="Paste a URL, email body, or SMS text..." required></textarea>
+                    <textarea name="content" rows="6" class="w-full border border-slate-200 rounded-xl p-4 text-sm font-mono focus:ring-2 focus:ring-brand-teal focus:border-brand-teal outline-none transition" placeholder="Paste a URL, email body, or message text..." required></textarea>
                 </div>
 
                 <button type="submit" class="w-full sm:w-auto justify-center bg-brand-teal hover:bg-teal-700 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition min-h-[44px]">

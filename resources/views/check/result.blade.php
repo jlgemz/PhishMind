@@ -18,13 +18,13 @@
                     Email Modality
                 @else
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                    SMS Modality
+                    Messages Modality
                 @endif
             </span>
             <span class="text-xs text-slate-400 font-medium">Machine Learning Inference</span>
         </div>
         <h2 class="text-3xl font-bold text-slate-800 mb-1">Random Forest Risk Assessment</h2>
-        <p class="text-slate-500 text-sm">Evaluating learned structural and lexical patterns for the submitted {{ strtoupper($type) }} input.</p>
+        <p class="text-slate-500 text-sm">Evaluating learned structural and lexical patterns for the submitted {{ $type === 'sms' ? 'MESSAGE' : strtoupper($type) }} input.</p>
     </div>
 
     <!-- Prominent Warning Banner -->
@@ -94,7 +94,7 @@
                     </div>
                     <div>
                         <span class="text-slate-400 block">Modality:</span>
-                        <span class="font-semibold text-slate-700">{{ ucfirst($type) }} Analysis</span>
+                        <span class="font-semibold text-slate-700">{{ $type === 'sms' ? 'Messages' : ucfirst($type) }} Analysis</span>
                     </div>
                     <div>
                         <span class="text-slate-400 block">Evaluation Mode:</span>

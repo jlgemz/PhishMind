@@ -41,7 +41,7 @@
                 $content = $scenario->content;
                 $isSms = $scenario->type === 'SMS Phishing';
                 $isEmail = $scenario->type === 'Email Phishing';
-                $previewLabel = $isEmail ? 'Email preview' : ($isSms ? 'SMS preview' : 'Message preview');
+                $previewLabel = $isEmail ? 'Email preview' : 'Message preview';
             @endphp
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div class="bg-[#f0f4f8] border-b border-slate-200 px-6 py-3 flex items-center gap-2 text-sm text-slate-600 font-semibold">

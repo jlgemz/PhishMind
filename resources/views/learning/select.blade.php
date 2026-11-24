@@ -87,8 +87,8 @@
                 </div>
                 <svg class="w-5 h-5 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
             </div>
-            <h4 class="font-bold text-slate-800 mb-1">SMS Phishing</h4>
-            <p class="text-sm text-slate-500 mb-6">Spot smishing lures: prize claims, delivery notices, fake bank alerts.</p>
+            <h4 class="font-bold text-slate-800 mb-1">Messages Phishing</h4>
+            <p class="text-sm text-slate-500 mb-6">Spot message lures: prize claims, delivery notices, fake bank alerts.</p>
         </a>
         @endif
     </div>

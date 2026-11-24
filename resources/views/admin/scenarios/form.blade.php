@@ -26,7 +26,7 @@
         </div>
 
         <div class="mb-4">
-            <label class="block text-sm font-bold mb-2">Content (URL, Email Body, or SMS Text)</label>
+            <label class="block text-sm font-bold mb-2">Content (URL, Email Body, or Message Text)</label>
             <textarea name="content" rows="6" class="w-full border rounded-lg px-4 py-2 font-mono text-sm" required>{{ $scenario->content ?? '' }}</textarea>
         </div>
 

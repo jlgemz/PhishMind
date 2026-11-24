@@ -7,6 +7,9 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
     <title>PhishMind</title>
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
+    <link rel="alternate icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ asset('logo.svg') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
@@ -50,9 +53,7 @@
         <div class="flex items-center justify-between px-5 mb-8 w-full"
              :class="{ 'md:justify-center md:px-0': !desktopSidebar }">
             <a href="{{ route('dashboard') }}" class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-brand-teal text-white rounded-xl flex items-center justify-center shrink-0 shadow-xs">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                </div>
+                <img src="{{ asset('logo.svg') }}" alt="PhishMind Logo" class="w-10 h-10 rounded-xl shrink-0 shadow-xs object-contain">
                 <div x-show="desktopSidebar" class="flex flex-col md:transition-opacity">
                     <span class="text-white font-bold text-lg leading-tight tracking-tight">PhishMind</span>
                     <span class="text-[11px] text-teal-300 font-medium tracking-wide uppercase">Learning Lab</span>

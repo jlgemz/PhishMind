@@ -149,21 +149,21 @@
         </button>
     </div>
 
-    <!-- SMS Dataset Card -->
+    <!-- Messages Dataset Card -->
     <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm md:col-span-2 lg:col-span-1">
-        <h3 class="text-lg font-bold text-slate-800 mb-2">SMS Dataset</h3>
-        <p class="text-sm text-slate-500 mb-4">Upload an SMS CSV (v1/v2 or label/text) or retrain the SMS model.</p>
+        <h3 class="text-lg font-bold text-slate-800 mb-2">Messages Dataset</h3>
+        <p class="text-sm text-slate-500 mb-4">Upload a Messages CSV (v1/v2 or label/text) or retrain the Messages model.</p>
 
         <form action="{{ route('admin.datasets.upload') }}" method="POST" enctype="multipart/form-data" class="mb-4 border-b border-slate-100 pb-4">
             @csrf
             <input type="hidden" name="dataset_type" value="sms">
             <input type="file" name="file" accept=".csv" required class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-800 file:text-white hover:file:bg-slate-900 mb-3">
-            <button type="submit" class="w-full bg-slate-800 text-white py-2 rounded-lg font-semibold hover:bg-slate-900 transition text-sm">Step 1: Upload SMS Dataset</button>
+            <button type="submit" class="w-full bg-slate-800 text-white py-2 rounded-lg font-semibold hover:bg-slate-900 transition text-sm">Step 1: Upload Messages Dataset</button>
         </form>
 
         <button @click="train('sms')" :disabled="loading" class="w-full bg-brand-teal text-white py-2.5 rounded-lg font-semibold hover:bg-teal-700 transition text-sm flex justify-center items-center gap-2">
             <svg x-show="loading && type === 'sms'" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-            <span x-text="loading && type === 'sms' ? 'Training... (Do not close)' : 'Step 2: Train SMS Model'"></span>
+            <span x-text="loading && type === 'sms' ? 'Training... (Do not close)' : 'Step 2: Train Messages Model'"></span>
         </button>
     </div>
 </div>
