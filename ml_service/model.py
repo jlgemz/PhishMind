@@ -21,7 +21,7 @@ class PhishingMLModel:
             X, y, test_size=0.2, random_state=42
         )
         self.model = RandomForestClassifier(
-            n_estimators=100, max_depth=10, random_state=42, class_weight='balanced'
+            n_estimators=100, max_depth=10, random_state=42, class_weight='balanced', n_jobs=-1
         )
         self.model.fit(X_train, y_train)
         self.explainer = shap.TreeExplainer(self.model)

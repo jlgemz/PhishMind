@@ -54,7 +54,7 @@
             <div class="flex justify-between items-start mb-4">
                 <div>
                     <h3 class="text-lg font-bold text-slate-800">Ollama</h3>
-                    <p class="text-sm text-slate-500 font-mono">{{ $ollamaStatus['url'] ?? 'http://127.0.0.1:11501/' }}</p>
+                    <p class="text-sm text-slate-500 font-mono" x-text="ollamaUrl">{{ $ollamaStatus['url'] ?? 'http://127.0.0.1:11434/' }}</p>
                 </div>
                 <div>
                     <span x-show="ollamaStatus" class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-md text-xs font-bold uppercase">Online</span>
@@ -174,6 +174,7 @@
         return {
             mlStatus: {{ $mlStatus['online'] ? 'true' : 'false' }},
             ollamaStatus: {{ $ollamaStatus['online'] ? 'true' : 'false' }},
+            ollamaUrl: '{{ $ollamaStatus['url'] ?? 'http://127.0.0.1:11434/' }}',
             toggling: null,
 
             init() {
@@ -194,6 +195,9 @@
                         const data = await res.json();
                         this.mlStatus = data.ml_online;
                         this.ollamaStatus = data.ollama_online;
+                        if (data.ollama_url) {
+                            this.ollamaUrl = data.ollama_url;
+                        }
                     }
                 } catch (e) {
                     // Ignore network errors during silent refresh
@@ -202,11 +206,19 @@
 
             async toggle(service) {
                 this.toggling = service;
-                const action = (service === 'ml' ? this.mlStatus : this.ollamaStatus) ? 'stop' : 'start';
+                const currentStatus = (service === 'ml' ? this.mlStatus : this.ollamaStatus);
+                const action = currentStatus ? 'stop' : 'start';
 
                 if(!confirm(`Are you sure you want to ${action} the ${service} service?`)) {
                     this.toggling = null;
                     return;
+                }
+
+                // Optimistically update status so toggle responds instantly
+                if (service === 'ollama') {
+                    this.ollamaStatus = (action === 'start');
+                } else {
+                    this.mlStatus = (action === 'start');
                 }
 
                 try {
@@ -221,12 +233,15 @@
                     
                     const data = await res.json();
                     if (data.success) {
-                        // Wait 2 seconds for the service to boot, then refresh status
-                        setTimeout(() => this.refresh(), 2000);
+                        setTimeout(() => this.refresh(), 1000);
                     } else {
+                        if (service === 'ollama') this.ollamaStatus = !this.ollamaStatus;
+                        else this.mlStatus = !this.mlStatus;
                         alert('Error: ' + data.message);
                     }
                 } catch (err) {
+                    if (service === 'ollama') this.ollamaStatus = !this.ollamaStatus;
+                    else this.mlStatus = !this.mlStatus;
                     alert('Network error. Check server logs.');
                     console.error(err);
                 } finally {

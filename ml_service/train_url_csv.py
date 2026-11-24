@@ -35,21 +35,29 @@ def train_url_model():
     df['url'] = df['url'].astype(str).str.strip()
     df['label'] = df['label'].astype(str).str.strip().str.lower()
 
-    # Separate and balance classes to prevent extreme 200:1 prior imbalance
+    # Separate and balance classes
     phish_df = df[df['label'].isin(['1', 'phishing', 'malicious'])]
     legit_df = df[df['label'].isin(['0', 'legitimate', 'benign'])]
 
-    if len(legit_df) > 0 and len(phish_df) > len(legit_df) * 3:
-        phish_sample = phish_df.sample(n=len(legit_df) * 3, random_state=42)
-        df = pd.concat([legit_df, phish_sample]).sample(frac=1.0, random_state=42)
-        print(f"⚖️ Balanced URL dataset: {len(legit_df)} legitimate, {len(phish_sample)} phishing")
+    # Cap to high-quality balanced subset (up to 5,000 each) for lightning-fast training
+    max_samples = 5000
+    if len(phish_df) > max_samples:
+        phish_df = phish_df.sample(n=max_samples, random_state=42)
+    if len(legit_df) > max_samples:
+        legit_df = legit_df.sample(n=max_samples, random_state=42)
+
+    df = pd.concat([legit_df, phish_df]).sample(frac=1.0, random_state=42)
+    print(f"⚖️ Balanced URL dataset: {len(legit_df)} legitimate, {len(phish_df)} phishing")
 
     extractor = FeatureExtractor()
     data, labels = [], []
 
-    for i, row in df.iterrows():
-        url = html.unescape(row['url']).strip()
-        label_str = row['label']
+    url_idx = df.columns.get_loc('url')
+    label_idx = df.columns.get_loc('label')
+
+    for row in df.itertuples(index=False):
+        url = html.unescape(str(row[url_idx])).strip()
+        label_str = str(row[label_idx])
 
         if 'phishing' in label_str or label_str == '1' or label_str == 'malicious':
             label = 1

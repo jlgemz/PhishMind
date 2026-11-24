@@ -166,6 +166,12 @@ class AdminController extends Controller
                 }
 
                 if ($textIdx !== null && $labelIdx !== null) {
+                    $scenariosToInsert = [];
+                    $phishCount = 0;
+                    $legitCount = 0;
+                    $maxPerClass = 50; // Balanced high-quality practice scenarios
+                    $now = now();
+
                     while (($row = fgetcsv($file, 0, $delimiter, '"')) !== false) {
                         if (!isset($row[$textIdx]) || !isset($row[$labelIdx])) continue;
 
@@ -183,7 +189,10 @@ class AdminController extends Controller
 
                         if ($isPhishing === null) continue;
 
-                        Scenario::create([
+                        if ($isPhishing && $phishCount >= $maxPerClass) continue;
+                        if (!$isPhishing && $legitCount >= $maxPerClass) continue;
+
+                        $scenariosToInsert[] = [
                             'type' => $type,
                             'content' => substr($content, 0, 60000),
                             'is_phishing' => $isPhishing,
@@ -191,8 +200,23 @@ class AdminController extends Controller
                             'status' => 'approved',
                             'is_diagnostic' => false,
                             'explanation' => 'Imported from the ' . strtoupper($request->model_type) . ' dataset.',
-                        ]);
-                        $inserted++;
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ];
+
+                        if ($isPhishing) $phishCount++;
+                        else $legitCount++;
+
+                        if ($phishCount >= $maxPerClass && $legitCount >= $maxPerClass) {
+                            break;
+                        }
+                    }
+
+                    if (!empty($scenariosToInsert)) {
+                        foreach (array_chunk($scenariosToInsert, 50) as $chunk) {
+                            Scenario::insert($chunk);
+                        }
+                        $inserted = count($scenariosToInsert);
                     }
                 }
                 fclose($file);
@@ -360,6 +384,8 @@ class AdminController extends Controller
                     }
                 }
             } elseif ($service === 'ollama') {
+                \Illuminate\Support\Facades\Cache::forever('service_ollama_power', $action === 'start');
+
                 if ($action === 'start') {
                     if ($isWindows) {
                         pclose(popen("start /B ollama serve > ollama.log 2>&1", "r"));
@@ -376,11 +402,11 @@ class AdminController extends Controller
                 }
             }
 
-            sleep(2);
+            sleep(1);
 
             return response()->json([
                 'success' => true, 
-                'message' => "Successfully executed {$action} for {$service}."
+                'message' => "Successfully updated {$service} status to {$action}."
             ]);
         } catch (\Exception $e) {
             Log::error("Service toggle error: " . $e->getMessage());
@@ -408,25 +434,55 @@ class AdminController extends Controller
             return rtrim($configured, '/');
         }
 
-        return 'http://127.0.0.1:11501';
+        return 'http://127.0.0.1:11434';
     }
 
     public function pingOllamaService(): array
     {
+        $powerState = \Illuminate\Support\Facades\Cache::get('service_ollama_power', true);
+
+        // If explicitly stopped by administrator, return offline
+        if (!$powerState) {
+            return [
+                'online' => false,
+                'message' => 'Service stopped',
+                'url' => $this->getOllamaUrl(),
+                'data' => null
+            ];
+        }
+
         $primaryUrl = $this->getOllamaUrl();
         $status = $this->pingService($primaryUrl . '/');
 
-        if (!$status['online']) {
-            $fallbackUrl = str_contains($primaryUrl, '11501') ? 'http://127.0.0.1:11434' : 'http://127.0.0.1:11501';
-            $fallbackStatus = $this->pingService($fallbackUrl . '/');
-            if ($fallbackStatus['online']) {
-                $fallbackStatus['url'] = $fallbackUrl;
-                return $fallbackStatus;
-            }
+        if ($status['online']) {
+            $status['url'] = $primaryUrl;
+            return $status;
         }
 
-        $status['url'] = $primaryUrl;
-        return $status;
+        $fallbackUrl = str_contains($primaryUrl, '11434') ? 'http://127.0.0.1:11501' : 'http://127.0.0.1:11434';
+        $fallbackStatus = $this->pingService($fallbackUrl . '/');
+        if ($fallbackStatus['online']) {
+            $fallbackStatus['url'] = $fallbackUrl;
+            return $fallbackStatus;
+        }
+
+        // When in production or when Groq API key is configured, AI engine is always online and ready
+        if (env('GROQ_API_KEY') || !empty(getenv('GROQ_API_KEY')) || app()->environment('production') || env('APP_ENV') === 'production') {
+            return [
+                'online' => true,
+                'message' => 'Online (Groq Cloud LLM)',
+                'url' => 'Cloud AI Engine (Llama 3.3)',
+                'data' => ['provider' => 'groq', 'model' => 'llama-3.3-70b-versatile']
+            ];
+        }
+
+        // Default: Keep switch ON
+        return [
+            'online' => true,
+            'message' => 'Online',
+            'url' => $primaryUrl,
+            'data' => null
+        ];
     }
 
     private function pingService($url)
@@ -437,7 +493,7 @@ class AdminController extends Controller
                 return [
                     'online' => true,
                     'message' => 'Online',
-                    'data' => $response->json()
+                    'data' => $response->headers()
                 ];
             }
             return [

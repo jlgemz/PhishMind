@@ -94,11 +94,15 @@ class AdaptiveLearningController extends Controller
             ->inRandomOrder()
             ->first();
 
-        // If no other scenario exists, fallback to any approved scenario of this type so user stays in the same modality
+        // If no other approved scenario exists, fallback to any scenario of this type so user stays in the same modality
         if (!$next) {
             $next = Scenario::where('type', $scenario->type)
                 ->where('status', 'approved')
                 ->first();
+        }
+
+        if (!$next) {
+            $next = Scenario::where('type', $scenario->type)->first();
         }
 
         if (!$next) {
@@ -207,6 +211,25 @@ class AdaptiveLearningController extends Controller
     {
         if ($record->user_id !== auth()->id()) abort(403);
         $record->load('scenario');
+
+        // If scenario relationship is null or detached, infer modality and restore a matching scenario
+        if (!$record->scenario) {
+            $rawContent = $record->scenario_url ?? '';
+            $inferredType = 'URL / Web Phishing';
+            if (str_contains(strtolower($rawContent), 'subject:') || (substr_count($rawContent, "\n") >= 2 && strlen($rawContent) > 120)) {
+                $inferredType = 'Email Phishing';
+            } elseif (strlen($rawContent) < 300 && !preg_match('#^https?://\S+$#i', trim($rawContent))) {
+                $inferredType = 'SMS Phishing';
+            }
+
+            $matchedScenario = Scenario::where('type', $inferredType)->where('status', 'approved')->inRandomOrder()->first()
+                ?? Scenario::where('type', $inferredType)->inRandomOrder()->first();
+
+            if ($matchedScenario) {
+                $record->setRelation('scenario', $matchedScenario);
+            }
+        }
+
         return view('learning.retry', compact('record'));
     }
 

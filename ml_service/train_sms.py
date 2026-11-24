@@ -46,6 +46,9 @@ def train_sms_model():
         if text_idx is None or label_idx is None:
             raise ValueError(f"Could not find text/label columns. Found: {headers}")
 
+        phish_count, legit_count = 0, 0
+        max_samples_per_class = 4000
+
         for row_num, row in enumerate(reader):
             if not row or len(row) <= max(text_idx, label_idx):
                 continue
@@ -57,8 +60,12 @@ def train_sms_model():
                 continue
 
             if label_str in ('1', 'phishing', 'spam', 'smishing', 'malicious'):
+                if phish_count >= max_samples_per_class:
+                    continue
                 label = 1
             elif label_str in ('0', 'legitimate', 'ham', 'benign'):
+                if legit_count >= max_samples_per_class:
+                    continue
                 label = 0
             else:
                 continue
@@ -68,9 +75,15 @@ def train_sms_model():
                 vector = [feats.get(f, 0) for f in extractor.get_feature_names()]
                 data.append(vector)
                 labels.append(label)
+                if label == 1:
+                    phish_count += 1
+                else:
+                    legit_count += 1
             except Exception as e:
-                print(f"  skipped row {row_num}: {e}")
                 continue
+
+            if phish_count >= max_samples_per_class and legit_count >= max_samples_per_class:
+                break
 
     if not data:
         raise ValueError("No valid samples extracted.")

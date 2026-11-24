@@ -48,7 +48,7 @@
             <div class="flex justify-between items-start mb-4">
                 <div>
                     <h3 class="text-lg font-bold text-slate-800">Ollama</h3>
-                    <p class="text-sm text-slate-500 font-mono">{{ $ollamaStatus['url'] ?? 'http://127.0.0.1:11501/' }}</p>
+                    <p class="text-sm text-slate-500 font-mono" x-text="ollamaUrl">{{ $ollamaStatus['url'] ?? 'http://127.0.0.1:11434/' }}</p>
                 </div>
                 
                 <!-- Status Badge -->
@@ -83,6 +83,7 @@
         return {
             mlStatus: false,
             ollamaStatus: false,
+            ollamaUrl: '{{ $ollamaStatus['url'] ?? 'http://127.0.0.1:11434/' }}',
             loading: false,
             toggling: null,
 
@@ -108,6 +109,9 @@
                         const data = await res.json();
                         this.mlStatus = data.ml_online;
                         this.ollamaStatus = data.ollama_online;
+                        if (data.ollama_url) {
+                            this.ollamaUrl = data.ollama_url;
+                        }
                     }
                 } catch (e) {
                     // Ignore errors during silent refresh
@@ -117,7 +121,15 @@
 
             async toggle(service) {
                 this.toggling = service;
-                const action = (service === 'ml' ? this.mlStatus : this.ollamaStatus) ? 'stop' : 'start';
+                const currentStatus = (service === 'ml' ? this.mlStatus : this.ollamaStatus);
+                const action = currentStatus ? 'stop' : 'start';
+
+                // Optimistically update status
+                if (service === 'ollama') {
+                    this.ollamaStatus = (action === 'start');
+                } else {
+                    this.mlStatus = (action === 'start');
+                }
 
                 try {
                     const res = await fetch('{{ route('admin.system.toggle') }}', {
@@ -131,12 +143,15 @@
                     
                     const data = await res.json();
                     if (data.success) {
-                        // Wait 1.5 seconds for the service to boot, then refresh status
-                        setTimeout(() => this.refresh(), 1500);
+                        setTimeout(() => this.refresh(), 1000);
                     } else {
+                        if (service === 'ollama') this.ollamaStatus = !this.ollamaStatus;
+                        else this.mlStatus = !this.mlStatus;
                         alert('Error: ' + data.message);
                     }
                 } catch (err) {
+                    if (service === 'ollama') this.ollamaStatus = !this.ollamaStatus;
+                    else this.mlStatus = !this.mlStatus;
                     alert('Network error. Check server logs.');
                 } finally {
                     this.toggling = null;
